@@ -11,13 +11,15 @@ use egui::{pos2, vec2};
 use crate::dialogs::{Outcome, window};
 use crate::winui::{self, ButtonKind, r};
 
-/// The repository: problem reports, releases, source, licences.
-pub const REPO: &str = "https://github.com/anefzaoui/misterdownloadmanager";
+/// The repository: problem reports, releases, source, licences. MDM RT: the fork's (upstream's is
+/// github.com/anefzaoui/misterdownloadmanager).
+pub const REPO: &str = "https://github.com/hamed7ir/mdm-rt";
 /// The creator's GitHub Sponsors page: Help → Support MDM, About's last line. The website, the
 /// extension's popup and the repository's Sponsor button (.github/FUNDING.yml) point there too.
 pub const SPONSORS: &str = "https://github.com/sponsors/anefzaoui";
-const LATEST: &str = "https://api.github.com/repos/anefzaoui/misterdownloadmanager/releases/latest";
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+const LATEST: &str = "https://api.github.com/repos/hamed7ir/mdm-rt/releases/latest";
+// MDM RT: its release version (a fix release is 0.5.2.1: build.rs rt_version).
+pub const VERSION: &str = env!("MDM_RT_VERSION");
 pub const COMMIT: &str = env!("MDM_COMMIT");
 /// While MDM runs, the automatic check comes again this often (it also checks at every start).
 pub const CHECK_EVERY: i64 = 24 * 3600;
@@ -184,7 +186,7 @@ async fn latest() -> Result<Found, String> {
     // The chosen DNS and network adapter, as downloads have them (#36, #35).
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, &feed)
         .map_err(|e| e.to_string())?
-        .user_agent(concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("MDM-RT/", env!("MDM_RT_VERSION")))
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
@@ -713,8 +715,8 @@ impl About {
         window(
             ctx,
             "about",
-            "About Mister Download Manager",
-            [420.0, 236.0 + extra],
+            "About MDM RT",
+            [420.0, 290.0 + extra],
             false,
             winui::BG(),
             |ui, o| {
@@ -729,7 +731,7 @@ impl About {
                     &p,
                     o.x + 80.0,
                     o.y + 28.0,
-                    crate::i18n::t("Mister Download Manager"),
+                    "MDM RT",
                     ink,
                 );
                 let version = crate::i18n::fmt(
@@ -750,9 +752,20 @@ impl About {
                     o.x + 404.0,
                     13.0,
                 );
+                // MDM RT: the fork's notice, never translated (7-Zip RT's has the same rule).
+                let fork_y = o.y + 72.0 + 13.0 * lines as f32 + 8.0;
+                let fork_lines = winui::paragraph(
+                    &p,
+                    o.x + 80.0,
+                    fork_y,
+                    "MDM RT is an unofficial fork of Mister Download Manager by Ahmed Nefzaoui, built for Windows RT 8.1 and Windows 10 ARM32 (Surface RT, Surface 2) and for x64 Windows.",
+                    winui::MUTED(),
+                    o.x + 404.0,
+                    13.0,
+                );
                 // The links in a row, 18 px apart; one that would pass the paragraph's right
                 // edge (a long translation) starts the next row.
-                let (mut x, mut y) = (o.x + 80.0, o.y + 72.0 + 13.0 * lines as f32 + 14.0);
+                let (mut x, mut y) = (o.x + 80.0, fork_y + 13.0 * fork_lines as f32 + 14.0);
                 let mut place = |label: &str| {
                     let w = winui::text_width(&p, crate::i18n::t(label));
                     if x > o.x + 80.0 && x + w > o.x + 404.0 {
@@ -781,7 +794,7 @@ impl About {
                     "Licenses and credits",
                     "credits",
                 ) {
-                    crate::launch::open(format!("{REPO}/blob/main/ATTRIBUTION.md"));
+                    crate::launch::open(format!("{REPO}/blob/HEAD/ATTRIBUTION.md"));
                 }
                 // Its own row under them: the creator's Sponsors page (Help → Support MDM).
                 y += 22.0;

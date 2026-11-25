@@ -71,8 +71,9 @@ mod winui;
 #[cfg(any(target_os = "linux", test))]
 mod xdgicons;
 
-/// The main window's title (dialogs find their owner by it).
-pub const MAIN_TITLE: &str = concat!("Mister Download Manager ", env!("CARGO_PKG_VERSION"));
+/// The main window's title (dialogs find their owner by it). MDM RT: its own name, so it never takes an
+/// upstream MDM's window running beside it for its own.
+pub const MAIN_TITLE: &str = concat!("MDM RT ", env!("MDM_RT_VERSION"));
 
 /// The app icon (art/, made with ChatGPT; sizes by tools/icon/build_icon.py), for windows that
 /// show one as IDM's do: the 256 px size, which the system scales down for the title bar, the

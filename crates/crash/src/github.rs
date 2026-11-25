@@ -3,7 +3,8 @@
 
 use serde::Deserialize;
 
-pub const REPO: &str = "anefzaoui/misterdownloadmanager";
+/// MDM RT: crash reports go to the fork, whose builds they come from.
+pub const REPO: &str = "hamed7ir/mdm-rt";
 
 /// GitHub turns away very long addresses: the form's address is kept under this, the report cut
 /// to fit (the full one goes in as the attached file).

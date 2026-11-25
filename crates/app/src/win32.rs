@@ -2452,7 +2452,7 @@ fn reg_string(key: &str, name: &str) -> Option<String> {
 /// names have `_` for `-`.
 pub fn take_install_language() -> Option<String> {
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
-    const KEY: &str = r"Software\MisterDownloadManager";
+    const KEY: &str = r"Software\MDM RT";
     const NAME: &str = "InstallLanguage";
     let value = reg_string(KEY, NAME)?;
     let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
@@ -2676,7 +2676,7 @@ pub fn set_torrent_handlers(on: bool) {
         HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW,
         RegSetKeyValueW,
     };
-    const PROGID: &str = "MisterDownloadManager.Torrent";
+    const PROGID: &str = "MDMRT.Torrent";
     let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
     let set = |key: &str, name: Option<&str>, value: &str| {
         let (key, value) = (w(key), w(value));
@@ -2771,7 +2771,8 @@ fn run_value() -> Option<String> {
             .ok()
             .filter(|v| v.starts_with("MisterDownloadManagerTest"));
     }
-    Some("MisterDownloadManager".to_owned())
+    // MDM RT: a value of its own beside an upstream MDM's.
+    Some("MDM RT".to_owned())
 }
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";

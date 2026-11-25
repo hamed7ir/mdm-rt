@@ -216,8 +216,9 @@ pub fn set_data_dir(dir: PathBuf) {
     let _ = DATA_DIR.set(dir);
 }
 
-/// The app's data folder, `%APPDATA%\misterdownloadmanager` (list, settings, channel, crash
-/// log). The folder of the app's former codename, `idmnext`, is moved here once.
+/// The app's data folder, `%APPDATA%\mdm-rt` (list, settings, channel, crash log). MDM RT: a folder
+/// of its own (upstream MDM's is `misterdownloadmanager`), so the two run side by side, each with its
+/// own list and command channel; upstream's former codename folder (`idmnext`) is not touched.
 ///
 /// `MDM_DATA_DIR` overrides it (a separate instance with its own list and channel: tests,
 /// screenshots). Portable mode: a writable `data` folder next to the program holds it all.
@@ -232,12 +233,7 @@ pub fn data_dir() -> Option<PathBuf> {
         return Some(dir);
     }
     let base = dirs::data_dir()?;
-    let dir = base.join("misterdownloadmanager");
-    let legacy = base.join("idmnext");
-    if !dir.exists() && legacy.is_dir() {
-        let _ = std::fs::rename(&legacy, &dir);
-    }
-    Some(dir)
+    Some(base.join("mdm-rt"))
 }
 
 /// Create the data folder `dir`, readable by its owner only on Linux and macOS (it holds the

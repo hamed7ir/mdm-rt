@@ -227,17 +227,23 @@ fn parse_release(json: &str, current: &str) -> Result<Found, String> {
         date: s("published_at").chars().take(10).collect(),
         notes: s("body"),
         page: s("html_url"),
+        // MDM RT: each file's address, then the SHA-256 GitHub shows for it as a "digest:<name>"
+        // entry (what Update now checks the release against, mdm_tools::update::fetch).
         assets: v["assets"]
             .as_array()
             .map(|a| {
-                a.iter()
-                    .filter_map(|x| {
-                        Some((
-                            x["name"].as_str()?.to_owned(),
-                            x["browser_download_url"].as_str()?.to_owned(),
-                        ))
-                    })
-                    .collect()
+                let mut out = Vec::new();
+                for x in a {
+                    let (Some(name), Some(url)) = (x["name"].as_str(), x["browser_download_url"].as_str())
+                    else {
+                        continue;
+                    };
+                    out.push((name.to_owned(), url.to_owned()));
+                    if let Some(d) = x["digest"].as_str() {
+                        out.push((format!("digest:{name}"), d.to_owned()));
+                    }
+                }
+                out
             })
             .unwrap_or_default(),
     }))

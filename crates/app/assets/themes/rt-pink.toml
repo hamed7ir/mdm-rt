@@ -1,0 +1,51 @@
+# RT Pink: one of MDM RT's built-in themes, 7-Zip RT's dark look (made by mdm-rt/branding/make-themes.py:
+# Kodi RT's purple palette, or its lightness and saturation in the accent's hue). Dark on both sides.
+
+name = "RT Pink"
+icons = "accent"
+
+[seeds.light]
+background = "#330b21"
+surface = "#1f0513"
+header = "#400827"
+text = "#fae6f1"
+accent = "#ff5fb7"
+selection = "#a83a76"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[seeds.dark]
+background = "#330b21"
+surface = "#1f0513"
+header = "#400827"
+text = "#fae6f1"
+accent = "#ff5fb7"
+selection = "#a83a76"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[colors]
+"window" = "#330b21"
+"text.muted" = "#ad7a96"
+"selection.inactive" = "#632346"
+"field" = "#501134"
+"field.border" = "#881353"
+"field.disabled" = "#40102a"
+"group.line" = "#881353"
+"button" = "#501134"
+"button.hot" = "#881353"
+"button.pressed" = "#a83a76"
+"button.border" = "#881353"
+"button.bottom" = "#881353"
+"button.disabled" = "#40102a"
+"button.default.border" = "#ff5fb7"
+"button.default.bottom" = "#ff5fb7"
+"link" = "#ffcfe9"
+"tab" = "#400827"
+"tab.page" = "#330b21"
+"scroll.track" = "#1f0513"
+"scroll.thumb" = "#881353"
+"scroll.thumb.hot" = "#a83a76"
+"scroll.thumb.pressed" = "#ff5fb7"

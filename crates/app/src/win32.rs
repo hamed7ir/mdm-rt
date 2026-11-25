@@ -2464,6 +2464,23 @@ pub fn take_install_language() -> Option<String> {
     Some(install_language_code(&value))
 }
 
+/// MDM RT: the colour MDM RT's Setup offered (its Colours page, `--colour`), taken once as the
+/// language is: an RT theme's id (`rt-blue`), read and then deleted, so a later update's can't
+/// override a choice made in View -> Theme.
+pub fn take_install_theme() -> Option<String> {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
+    const KEY: &str = r"Software\MDM RT";
+    const NAME: &str = "InstallTheme";
+    let value = reg_string(KEY, NAME)?;
+    let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
+    let (key, name) = (w(KEY), w(NAME));
+    // SAFETY: NUL-terminated key and value names.
+    unsafe {
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr());
+    }
+    Some(value.trim().to_owned())
+}
+
 /// An Inno language name (`lang_pt_br`, tools/installer/languages.py) as a languages.tsv code.
 fn install_language_code(inno: &str) -> String {
     inno.strip_prefix("lang_").unwrap_or(inno).replace('_', "-")

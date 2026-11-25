@@ -1,0 +1,51 @@
+# RT Teal: one of MDM RT's built-in themes, 7-Zip RT's dark look (made by mdm-rt/branding/make-themes.py:
+# Kodi RT's purple palette, or its lightness and saturation in the accent's hue). Dark on both sides.
+
+name = "RT Teal"
+icons = "accent"
+
+[seeds.light]
+background = "#112d2b"
+surface = "#091b1a"
+header = "#103834"
+text = "#e9f7f6"
+accent = "#25dac9"
+selection = "#4a9891"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[seeds.dark]
+background = "#112d2b"
+surface = "#091b1a"
+header = "#103834"
+text = "#e9f7f6"
+accent = "#25dac9"
+selection = "#4a9891"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[colors]
+"window" = "#112d2b"
+"text.muted" = "#81a5a2"
+"selection.inactive" = "#2c5a56"
+"field" = "#1a4743"
+"field.border" = "#24776f"
+"field.disabled" = "#173936"
+"group.line" = "#24776f"
+"button" = "#1a4743"
+"button.hot" = "#24776f"
+"button.pressed" = "#4a9891"
+"button.border" = "#24776f"
+"button.bottom" = "#24776f"
+"button.disabled" = "#173936"
+"button.default.border" = "#25dac9"
+"button.default.bottom" = "#25dac9"
+"link" = "#d6f8f5"
+"tab" = "#103834"
+"tab.page" = "#112d2b"
+"scroll.track" = "#091b1a"
+"scroll.thumb" = "#24776f"
+"scroll.thumb.hot" = "#4a9891"
+"scroll.thumb.pressed" = "#25dac9"

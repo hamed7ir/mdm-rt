@@ -316,7 +316,7 @@ pub struct Settings {
 pub use mdm_ipc::capture::{DEFAULT_AUTO_TYPES, DEFAULT_EXCLUDED_SITES};
 /// The browsers IDM 6.42 lists, plus Firefox's forks MDM tells apart (#41; capture::browser_named),
 /// all captured on.
-pub const BROWSERS: [&str; 12] = [
+pub const BROWSERS: [&str; 13] = [
     "Apple Safari",          // not translated: a product name
     "Brave Browser",         // not translated: a product name
     "Floorp",                // not translated: a product name
@@ -327,6 +327,7 @@ pub const BROWSERS: [&str; 12] = [
     "Microsoft Edge Legacy", // not translated: a product name
     "Mozilla Firefox",       // not translated: a product name
     "Opera",                 // not translated: a product name
+    "Venetium",              // not translated: a product name (MDM RT: capture::browser_named)
     "Waterfox",              // not translated: a product name
     "Zen Browser",           // not translated: a product name
 ];

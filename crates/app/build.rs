@@ -10,14 +10,26 @@ fn main() {
     commit();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let windows = os == "windows";
+    // MDM RT: 32-bit Arm Windows (Windows RT 8.1, Windows 10 on the Surface RT and 2).
+    let arm32 = windows && std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("arm");
+    // `--cfg mdm_rt_angle`: an x86/x64 build that draws as the ARM32 one does (MDM RT's test build).
+    println!("cargo::rustc-check-cfg=cfg(mdm_rt_angle)");
+    let angle = arm32 || std::env::var_os("CARGO_CFG_MDM_RT_ANGLE").is_some();
     // `cfg(gpu)`: wgpu is built, with this system's own graphics API (renderer.rs, #89, #206):
-    // Direct3D 12 on Windows, Vulkan on Linux, Metal on macOS (Cargo.toml).
+    // Direct3D 12 on Windows, Vulkan on Linux, Metal on macOS (Cargo.toml). Not on 32-bit Arm:
+    // no Direct3D 12 there, OpenGL ES through ANGLE draws.
     println!("cargo::rustc-check-cfg=cfg(gpu)");
-    if matches!(os.as_str(), "windows" | "linux" | "macos") {
+    if matches!(os.as_str(), "windows" | "linux" | "macos") && !angle {
         println!("cargo::rustc-cfg=gpu");
     }
+    // 32-bit Arm programs need subsystem version 6.02 (Windows 8, the first Arm Windows): the
+    // legacy 5.02 frame metrics don't exist there.
     if windows && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-        println!("cargo:rustc-link-arg-bins=/SUBSYSTEM:WINDOWS,5.02");
+        if arm32 {
+            println!("cargo:rustc-link-arg-bins=/SUBSYSTEM:WINDOWS,6.02");
+        } else {
+            println!("cargo:rustc-link-arg-bins=/SUBSYSTEM:WINDOWS,5.02");
+        }
     }
     // The icon and version info are for a Windows program only (not one built on Windows for
     // Linux or macOS); winresource builds on Windows only.

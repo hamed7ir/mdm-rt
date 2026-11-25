@@ -76,8 +76,9 @@ pub const GPU: Option<Api> = if !cfg!(gpu) {
 };
 
 /// What draws when the user chose nothing (the settings' `renderer: None`): Direct3D on Windows
-/// (#89), OpenGL elsewhere (#206: Vulkan and Metal are choices until real cards have tried them).
-pub const DEFAULT: Api = if cfg!(windows) {
+/// (#89), OpenGL elsewhere (#206: Vulkan and Metal are choices until real cards have tried them),
+/// and where wgpu isn't built (32-bit Arm Windows: OpenGL ES through ANGLE).
+pub const DEFAULT: Api = if cfg!(windows) && cfg!(gpu) {
     Api::Direct3D
 } else {
     Api::OpenGl

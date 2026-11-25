@@ -55,6 +55,8 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Console",
     "Win32_System_IO",
     "Win32_System_Ioctl",
+    # MDM RT: GetProcAddress, for Windows 10's DPI functions on Windows RT 8.1 (crates/app/src/win32.rs dpi10).
+    "Win32_System_LibraryLoader",
     "Win32_System_Power",
     "Win32_System_ProcessStatus",
     "Win32_System_Registry",

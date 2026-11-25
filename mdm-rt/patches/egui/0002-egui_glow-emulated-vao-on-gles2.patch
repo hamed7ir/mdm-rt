@@ -1,0 +1,21 @@
+diff --git a/crates/egui_glow/src/vao.rs b/crates/egui_glow/src/vao.rs
+index bb95293..fb533a6 100644
+--- a/crates/egui_glow/src/vao.rs
++++ b/crates/egui_glow/src/vao.rs
+@@ -139,11 +139,11 @@ fn supports_vao(gl: &glow::Context) -> bool {
+     } else if version_string.contains(OPENGL_ES_PREFIX) {
+         // glow targets es2.0+ so we don't concern about OpenGL ES-CM,OpenGL ES-CL
+         if version_string.contains("2.0") {
+-            // need to test OES_vertex_array_object .
+-            let supported_extensions = gl.supported_extensions();
+-            log::debug!("Supported OpenGL extensions: {supported_extensions:?}");
+-            supported_extensions.contains("OES_vertex_array_object")
+-                || supported_extensions.contains("GL_OES_vertex_array_object")
++            // MDM RT: emulated on OpenGL ES 2.0. ANGLE's ES 2 contexts (Direct3D 9: the Tegra tablets)
++            // report OES_vertex_array_object but also hand out ES 3's glGenVertexArrays, which glow
++            // prefers and which fails in an ES 2 context ("Unable to create VertexArray object").
++            // Emulating costs a few calls per draw.
++            false
+         } else {
+             true
+         }

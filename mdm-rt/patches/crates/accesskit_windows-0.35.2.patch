@@ -1,0 +1,33 @@
+diff --git a/src/adapter.rs b/src/adapter.rs
+--- a/src/adapter.rs
++++ b/src/adapter.rs
+@@ -644,7 +644,10 @@
+         for event in self.0 {
+             match event {
+                 QueuedEvent::Simple { element, event_id } => {
+-                    unsafe { UiaRaiseAutomationEvent(&element, event_id) }.unwrap();
++                    // MDM RT: an event or property this Windows doesn't know (Windows RT 8.1 and early
++                    // Windows 10 lack newer UIA ones: "Unknown propertyId", E_INVALIDARG) is no reason to
++                    // end the program (an unwrap: a panic, so an abort on ARM32).
++                    let _ = unsafe { UiaRaiseAutomationEvent(&element, event_id) };
+                 }
+                 QueuedEvent::PropertyChanged {
+                     element,
+@@ -652,15 +655,14 @@
+                     old_value,
+                     new_value,
+                 } => {
+-                    unsafe {
++                    let _ = unsafe {
+                         UiaRaiseAutomationPropertyChangedEvent(
+                             &element,
+                             property_id,
+                             &old_value,
+                             &new_value,
+                         )
+-                    }
+-                    .unwrap();
++                    };
+                 }
+             }
+         }

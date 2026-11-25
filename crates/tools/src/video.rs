@@ -323,7 +323,10 @@ fn supervise(
     child: &Child,
     expected: Option<u64>,
     retry: Option<&SubsRetry>,
+    looked_page: Option<crate::resolve::LookedPage>,
 ) {
+    // MDM RT: the window's look-up, for the first try only.
+    let mut looked_page = looked_page;
     let mut ours = ours.to_vec();
     let mut dead: std::collections::BTreeSet<String> = Default::default();
     let mut looked_again = false;
@@ -333,6 +336,7 @@ fn supervise(
     for _ in 0..5 {
         match attempt(
             exe, url, &ours, browser, progress, child, expected, retry, &dead, reroute,
+            looked_page.take(),
         ) {
             Attempt::Stopped => return,
             Attempt::Done(f, problems, quality) => {
@@ -648,9 +652,19 @@ fn attempt(
     retry: Option<&SubsRetry>,
     dead: &std::collections::BTreeSet<String>,
     reroute: bool,
+    looked_page: Option<crate::resolve::LookedPage>,
 ) -> Attempt {
     let failed = |error: String, rerouted: bool| Attempt::Failed { error, rerouted };
-    let mut info = match look_up(exe, url, browser) {
+    // MDM RT: the video window's look-up of this page, when it came with the download: no second look-up.
+    let looked_up = match looked_page {
+        Some(p) => {
+            note(progress, "Started from the video window's look-up (no second look-up)".into());
+            let json = Arc::try_unwrap(p.json).unwrap_or_else(|shared| (*shared).clone());
+            Ok((json, p.without_cookies))
+        }
+        None => look_up(exe, url, browser),
+    };
+    let mut info = match looked_up {
         Ok((v, without_cookies)) => {
             if without_cookies {
                 note(
@@ -842,6 +856,26 @@ impl VideoJob {
         browser: &proc::FromBrowser,
         subs: &Subs,
     ) -> Result<VideoJob, ProcError> {
+        Self::start_looked(exe, url, selector, dir, stem, rate, ffmpeg, expected, browser, subs, None)
+    }
+
+    /// MDM RT: [`start`](Self::start), its first try downloading from `looked_page` (the video window's
+    /// look-up of the same page; the caller checks it is recent) instead of looking the page up again. A
+    /// later try (after a failure) looks up afresh, as before.
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_looked(
+        exe: &Path,
+        url: &str,
+        selector: &str,
+        dir: &Path,
+        stem: &str,
+        rate: Option<u64>,
+        ffmpeg: Option<&Path>,
+        expected: Option<u64>,
+        browser: &proc::FromBrowser,
+        subs: &Subs,
+        looked_page: Option<crate::resolve::LookedPage>,
+    ) -> Result<VideoJob, ProcError> {
         proc::safe(url)?;
         let output = dir.join(format!("{}.%(ext)s", template_text(stem)));
         // An MP3, Opus or FLAC choice (#32, #70): the best sound, converted by ffmpeg.
@@ -954,6 +988,7 @@ impl VideoJob {
                         &child,
                         expected,
                         retry.as_ref(),
+                        looked_page,
                     )
                 });
                 if std::panic::catch_unwind(run).is_err() {

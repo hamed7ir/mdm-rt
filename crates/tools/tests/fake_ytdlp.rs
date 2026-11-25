@@ -25,6 +25,7 @@ fn main() -> ExitCode {
         checks(&me);
         job_checks(&me);
         list_checks(&me);
+        looked_page_checks(&me);
         println!("fake_ytdlp: ok");
         return ExitCode::SUCCESS;
     }
@@ -102,6 +103,17 @@ fn fake_ytdlp() -> ExitCode {
         return ExitCode::FAILURE;
     }
     if has("-J") {
+        // MDM RT: each look-up counted beside the fake (looked_page_checks).
+        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+            use std::io::Write;
+            if let Ok(mut log) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("lookups.log"))
+            {
+                let _ = writeln!(log, "-J");
+            }
+        }
         const PAGE: &str = r#"{"title": "Talk", "language": "ru", "formats": [
             {"format_id": "18", "ext": "mp4", "height": 360, "vcodec": "avc1", "acodec": "mp4a"}],
             "automatic_captions": {"en": [{"name": "English"}], "ru": [{"name": "Russian"}]}}"#;
@@ -478,6 +490,55 @@ fn list_checks(me: &Path) {
         kept,
         "nothing listed after the stop"
     );
+}
+
+/// MDM RT: a download started with the video window's look-up (`start_looked`) asks yt-dlp for no second
+/// look-up and saves the video; one started plainly looks the page up once, as before.
+fn looked_page_checks(me: &Path) {
+    for (looked, want) in [(true, 0usize), (false, 1usize)] {
+        let tools = tempfile::tempdir().unwrap();
+        let out = tempfile::tempdir().unwrap();
+        let exe = fake_in(me, tools.path());
+        let page: serde_json::Value = serde_json::from_str(
+            r#"{"title": "Talk", "formats": [{"format_id": "18", "ext": "mp4", "height": 360,
+                "vcodec": "avc1", "acodec": "mp4a"}]}"#,
+        )
+        .unwrap();
+        let job = VideoJob::start_looked(
+            &exe,
+            "https://video.example/talk",
+            "b",
+            out.path(),
+            "Talk",
+            None,
+            None,
+            None,
+            &Default::default(),
+            &Subs::default(),
+            looked.then(|| mdm_tools::resolve::LookedPage {
+                json: std::sync::Arc::new(page),
+                at: Instant::now(),
+                without_cookies: false,
+            }),
+        )
+        .expect("started");
+        let end = Instant::now() + Duration::from_secs(120);
+        let p = loop {
+            let p = job.progress();
+            if p.state != State::Running {
+                break p;
+            }
+            assert!(Instant::now() < end, "still running: {p:?}");
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+        let n = std::fs::read_to_string(tools.path().join("lookups.log"))
+            .unwrap_or_default()
+            .lines()
+            .count();
+        assert_eq!(n, want, "look-ups, started with the window's look-up: {looked}");
+    }
+    println!("looked page: ok (0 look-ups with it, 1 without)");
 }
 
 fn checks(me: &Path) {

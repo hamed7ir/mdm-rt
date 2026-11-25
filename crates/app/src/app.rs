@@ -310,6 +310,10 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 }
 
 /// The status strip's height, under the list and the Categories pane.
+/// MDM RT: how long the video window's look-up stays good for its download (YouTube's addresses in it last a
+/// few hours; a download started later looks the page up again).
+const VIDEO_PAGE_KEPT: Duration = Duration::from_secs(2 * 3600);
+
 const STRIP_H: f32 = 22.0;
 
 impl Cmd {
@@ -665,6 +669,9 @@ pub struct App {
     /// Stopped by hand while they could have run: a running queue leaves them alone until
     /// they are started again or the queue is started anew (#341).
     stopped_by_hand: std::collections::HashSet<u64>,
+    /// MDM RT: the video window's look-up per video download not started yet (start_video uses it while
+    /// under two hours old: YouTube's addresses in it last a few hours).
+    video_pages: HashMap<u64, mdm_tools::resolve::LookedPage>,
     /// Seconds since local midnight at the last scheduler tick.
     clock: u32,
     /// Scheduler → "Wake the computer to run this queue": the wake set with the system (#142).
@@ -1195,6 +1202,7 @@ impl App {
             queues,
             failures: HashMap::new(),
             stopped_by_hand: Default::default(),
+            video_pages: HashMap::new(),
             clock: seconds_now(),
             wake: Default::default(),
             commands,
@@ -3400,6 +3408,11 @@ impl App {
                 subs: add.subs,
             });
         }
+        // MDM RT: the window's look-up, for start_video (stale ones go first).
+        self.video_pages.retain(|_, p| p.at.elapsed() < VIDEO_PAGE_KEPT);
+        if let Some(p) = add.looked_page {
+            self.video_pages.insert(id, p);
+        }
         // The Subtitles choice is offered again for the next video (#68).
         if let Some(subs) = add.remember {
             self.settings.video_subs = subs;
@@ -3471,6 +3484,11 @@ impl App {
     /// Start a video item: yt-dlp (installed and verified) downloads it.
     fn start_video(&mut self, id: u64, show: bool) {
         self.claim_place(id);
+        // MDM RT: the video window's look-up of this page, while recent: the download starts from it.
+        let looked_page = self
+            .video_pages
+            .remove(&id)
+            .filter(|p| p.at.elapsed() < VIDEO_PAGE_KEPT);
         let tools = mdm_tools::tools_dir();
         let tool = tools.as_deref().and_then(mdm_tools::installed);
         let ffmpeg = tools.as_deref().and_then(mdm_tools::ffmpeg::installed);
@@ -3497,7 +3515,7 @@ impl App {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "video".into());
         let _ = std::fs::create_dir_all(&folder);
-        let started = mdm_tools::video::VideoJob::start(
+        let started = mdm_tools::video::VideoJob::start_looked(
             &tool.exe,
             item.url.as_str(),
             &spec.selector,
@@ -3508,6 +3526,7 @@ impl App {
             item.size,
             &crate::videodlg::from_browser(&item.context),
             &spec.subs,
+            looked_page,
         );
         match started {
             Ok(job) => {

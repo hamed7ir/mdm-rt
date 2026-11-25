@@ -23,6 +23,19 @@ pub struct Video {
     /// A plain file at this address, not a page or a stream (yt-dlp's `direct`). yt-dlp says
     /// nothing of its size then: the server is asked (`needs_size`, #320).
     pub direct: bool,
+    /// MDM RT: the look-up's whole answer, for the download to start from ([`LookedPage`]).
+    pub looked_page: Option<LookedPage>,
+}
+
+/// MDM RT: a look-up's whole answer (`yt-dlp -J`) and when it came. The download's first try starts from it
+/// (`video::VideoJob::start_looked`) instead of asking yt-dlp the same again: on a Surface RT each yt-dlp
+/// look-up takes a minute and more (Python, YouTube's JavaScript challenge in QuickJS).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LookedPage {
+    pub json: std::sync::Arc<serde_json::Value>,
+    pub at: std::time::Instant,
+    /// It took looking the page up without the browser's cookies ([`proc::LookedUp`]).
+    pub without_cookies: bool,
 }
 
 impl Video {
@@ -172,6 +185,7 @@ pub fn parse(json: &[u8]) -> Option<Video> {
         automatic: tracks(raw.automatic_captions),
         language: raw.language,
         direct: raw.direct,
+        looked_page: None,
     })
 }
 
@@ -281,10 +295,19 @@ pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Loo
     let (theirs, _cookies) = browser.args(url)?;
     args.extend(theirs);
     let out = proc::look_up(exe, &args, url, Duration::from_secs(90))?;
-    parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
+    let mut looked = parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
         tool: "yt-dlp".into(),
         message: "it gave no video information".into(),
-    })
+    })?;
+    // MDM RT: kept for the download (a video, not a list's first page).
+    if let Looked::Video(v) = &mut looked {
+        v.looked_page = serde_json::from_slice(&out.json).ok().map(|json| LookedPage {
+            json: std::sync::Arc::new(json),
+            at: std::time::Instant::now(),
+            without_cookies: out.without_cookies,
+        });
+    }
+    Ok(looked)
 }
 
 /// Look `url` up as one video (a list is an error here).
@@ -566,6 +589,7 @@ mod tests {
             automatic: Vec::new(),
             language: None,
             direct: false,
+            looked_page: None,
         };
         let labels: Vec<String> = choices(&v, true)
             .into_iter()

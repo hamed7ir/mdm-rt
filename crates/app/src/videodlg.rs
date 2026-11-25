@@ -36,6 +36,8 @@ pub struct VideoAdd {
     /// The Subtitles choice to remember for the next video (settings.video_subs); none when
     /// the page had no subtitles to choose from (the last real choice stays).
     pub remember: Option<Subs>,
+    /// MDM RT: this window's look-up of the page, for the download to start from (no second look-up).
+    pub looked_page: Option<mdm_tools::resolve::LookedPage>,
 }
 
 /// Which helper is being installed.
@@ -437,6 +439,12 @@ impl VideoDialog {
                         }
                     },
                     remember: (!self.subs.is_empty()).then_some(chosen),
+                    // MDM RT: only for the address that was looked up (not one edited since).
+                    looked_page: self
+                        .video
+                        .as_ref()
+                        .filter(|_| self.looked_up == self.page.trim())
+                        .and_then(|(v, _)| v.looked_page.clone()),
                 }))
             }
         }

@@ -64,8 +64,9 @@ pub fn installed(dir: &Path) -> Option<Installed> {
     let own = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg).or_else(|| own(dir));
     #[cfg(not(windows))]
     return own.or_else(system);
+    // MDM RT: else the one beside the program (`crate::bundled`).
     #[cfg(windows)]
-    own
+    own.or_else(|| crate::bundled("ffmpeg"))
 }
 
 /// MDM's own install in `dir`.
@@ -102,6 +103,12 @@ pub async fn install_latest(
     // The person's own copy: theirs to update (#51).
     if let Some(mine) = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg) {
         return Ok(mine);
+    }
+    // MDM RT on 32-bit Arm: BtbN's builds don't run here; the one beside MDM RT comes with its updates.
+    if !crate::DOWNLOADS_RUN_HERE {
+        return crate::bundled("ffmpeg").ok_or_else(|| {
+            Error::Missing("ffmpeg for 32-bit Arm (MDM RT's Setup brings it)".into())
+        });
     }
     if !cfg!(windows) {
         return Err(Error::Missing(

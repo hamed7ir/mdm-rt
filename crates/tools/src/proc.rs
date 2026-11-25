@@ -190,6 +190,8 @@ pub fn look_up(
     url: &str,
     timeout: Duration,
 ) -> Result<LookedUp, ProcError> {
+    // MDM RT: never less than LOOKUP_TIMEOUT_MIN (minutes on a Windows RT tablet).
+    let timeout = timeout.max(crate::LOOKUP_TIMEOUT_MIN);
     let run = |args: &[String]| output(ytdlp(exe, &[], args, url)?, "yt-dlp", timeout);
     match run(ours) {
         Ok(json) => Ok(LookedUp {
@@ -685,7 +687,8 @@ fn nvm_node(home: &Path) -> Option<PathBuf> {
 
 /// What yt-dlp should be told about JavaScript (#360, #352, #351): YouTube's formats need a
 /// runtime, and yt-dlp looks for Deno alone unless told of another. Deno found: nothing to say.
-/// Else Node.js or Bun, if there is one.
+/// Else Node.js or Bun, if there is one; else (MDM RT) the QuickJS beside the program
+/// (`helpers/qjs.exe`, `crate::bundled`): 32-bit Arm Windows has no Deno, Node.js or Bun.
 fn js_runtime(dirs: &[PathBuf], home: Option<&Path>) -> Option<(&'static str, PathBuf)> {
     if program_in(dirs, "deno").is_some() {
         return None;
@@ -694,6 +697,7 @@ fn js_runtime(dirs: &[PathBuf], home: Option<&Path>) -> Option<(&'static str, Pa
         .or_else(|| home.and_then(nvm_node))
         .map(|p| ("node", p))
         .or_else(|| program_in(dirs, "bun").map(|p| ("bun", p)))
+        .or_else(|| crate::bundled("qjs").map(|q| ("quickjs", q.exe)))
 }
 
 /// `--js-runtimes` for this computer's Node.js or Bun, looked for once.

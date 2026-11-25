@@ -39,7 +39,10 @@ pub const USER_AGENT: &str = concat!(
 /// for it: Homebrew's `gallery-dl`, chosen in Helpers, works there) and on Linux other than
 /// x86-64 (the same, from the system's packages or pip).
 pub fn asset() -> Option<&'static str> {
-    if cfg!(windows) {
+    // MDM RT: no 32-bit Arm Windows build (a gallery-dl chosen in Helpers still works).
+    if cfg!(all(windows, target_arch = "arm")) {
+        None
+    } else if cfg!(windows) {
         Some("gallery-dl.exe")
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         Some("gallery-dl.bin")

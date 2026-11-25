@@ -76,6 +76,39 @@ pub fn tools_dir() -> Option<PathBuf> {
     mdm_ipc::data_dir().map(|d| d.join("tools"))
 }
 
+/// MDM RT: whether the helper builds MDM downloads run here. yt-dlp, BtbN's ffmpeg and gallery-dl publish
+/// x86, x64 and ARM64 Windows programs only, and 32-bit Arm Windows (Windows RT 8.1, Windows 10 on the
+/// Surface RT and 2) runs none of them: MDM RT's ARM32 Setup brings its own ([`bundled`]) instead.
+pub const DOWNLOADS_RUN_HERE: bool = !cfg!(all(windows, target_arch = "arm"));
+
+/// MDM RT: the least time a yt-dlp look-up (a page's video information) gets ([`proc::look_up`]): 4 minutes on
+/// 32-bit Arm, where a Surface RT's Cortex-A9 needs well over upstream's 90 s for a first YouTube look-up
+/// (Python, then YouTube's JavaScript challenge in QuickJS) and the limit hid yt-dlp's own error ("connection
+/// refused") behind "took too long"; elsewhere the caller's time.
+pub const LOOKUP_TIMEOUT_MIN: std::time::Duration = if cfg!(all(windows, target_arch = "arm")) {
+    std::time::Duration::from_secs(240)
+} else {
+    std::time::Duration::ZERO
+};
+
+/// MDM RT: a helper shipped beside the program, in `<program folder>/helpers/` (`yt-dlp.exe`: a launcher
+/// that runs yt-dlp's own zipapp with Kodi RT's ARM32 Python; `ffmpeg.exe`; `qjs.exe`, QuickJS for
+/// YouTube's challenges), its version from `helpers/versions.json`. Used when the person chose none
+/// (`chosen`) and MDM installed none.
+pub fn bundled(name: &str) -> Option<Installed> {
+    let dir = std::env::current_exe().ok()?.parent()?.join("helpers");
+    let exe = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    if !exe.is_file() {
+        return None;
+    }
+    let version = std::fs::read(dir.join("versions.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<std::collections::BTreeMap<String, String>>(&b).ok())
+        .and_then(|m| m.get(name).cloned())
+        .unwrap_or_else(|| "bundled".into());
+    Some(Installed { version, exe })
+}
+
 /// yt-dlp's file name for this platform in its releases. On macOS, its folder build: why, in
 /// `macos`.
 pub fn ytdlp_asset() -> &'static str {
@@ -229,9 +262,12 @@ pub fn sum_for(sums: &str, name: &str) -> Option<[u8; 32]> {
 }
 
 /// The yt-dlp to use: the person's own (`chosen`), else MDM's install in `dir`
-/// (`dir/yt-dlp/current.json`), if any and still there.
+/// (`dir/yt-dlp/current.json`), if any and still there, else the one beside the program (MDM RT:
+/// [`bundled`]).
 pub fn installed(dir: &Path) -> Option<Installed> {
-    chosen::chosen(dir, chosen::Helper::YtDlp).or_else(|| own_ytdlp(dir))
+    chosen::chosen(dir, chosen::Helper::YtDlp)
+        .or_else(|| own_ytdlp(dir))
+        .or_else(|| bundled("yt-dlp"))
 }
 
 fn own_ytdlp(dir: &Path) -> Option<Installed> {
@@ -273,6 +309,10 @@ pub async fn install_latest(
     // The person's own copy: theirs to update (#51).
     if let Some(mine) = chosen::chosen(dir, chosen::Helper::YtDlp) {
         return Ok(mine);
+    }
+    // MDM RT on 32-bit Arm: yt-dlp's programs don't run here; the one beside MDM RT comes with its updates.
+    if !DOWNLOADS_RUN_HERE {
+        return bundled("yt-dlp").ok_or_else(|| Error::Missing("yt-dlp for 32-bit Arm (MDM RT's Setup brings it)".into()));
     }
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
         .user_agent(USER_AGENT)

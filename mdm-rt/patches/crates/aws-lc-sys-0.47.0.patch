@@ -1,0 +1,24 @@
+diff --git a/aws-lc/crypto/thread_win.c b/aws-lc/crypto/thread_win.c
+index 0ce0f9f..27e3930 100644
+--- a/aws-lc/crypto/thread_win.c
++++ b/aws-lc/crypto/thread_win.c
+@@ -153,7 +153,9 @@ static void NTAPI thread_local_destructor(PVOID module, DWORD reason,
+ #ifdef _MSC_VER
+ #define STRINGIFY(x) #x
+ #define EXPAND_AND_STRINGIFY(x) STRINGIFY(x)
+-#ifdef _WIN64
++// MDM RT: 32-bit Arm decorates C names like 64-bit Windows does (no leading underscore; only x86 has one), and
++// its .CRT section is merged with .rdata too.
++#if defined(_WIN64) || defined(_M_ARM)
+ __pragma(comment(linker, "/INCLUDE:_tls_used"))
+ __pragma(comment(
+     linker, "/INCLUDE:" EXPAND_AND_STRINGIFY(p_thread_callback_boringssl)))
+@@ -182,7 +184,7 @@ __pragma(comment(
+ // be called.
+ #if defined(_MSC_VER)
+ 
+-#ifdef _WIN64
++#if defined(_WIN64) || defined(_M_ARM)
+ 
+ // .CRT section is merged with .rdata on x64 so it must be constant data.
+ #pragma const_seg(".CRT$XLC")

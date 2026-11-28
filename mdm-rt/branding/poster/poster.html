@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MDM RT 1.1</title>
+<!-- mdm-rt poster: Kodi RT's and 7-Zip RT's poster layout (1920x800 CSS, rendered at 1.5x = 2880x1200), same purple.
+     Screenshots: the x86 test build (its UI is the arm32 one: the same code, drawn through ANGLE as on the tablets),
+     made with mdm-rt/tools/winshot.py. Render: mdm-rt/branding/make-poster.py -->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 800px; overflow: hidden; }
+  body {
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif; color: #fff;
+    background:
+      radial-gradient(ellipse 720px 420px at 12% 92%, rgba(200, 80, 255, .45), transparent 70%),
+      radial-gradient(ellipse 640px 380px at 88% 18%, rgba(150, 60, 255, .42), transparent 70%),
+      radial-gradient(ellipse 900px 520px at 55% 60%, rgba(110, 30, 190, .55), transparent 75%),
+      linear-gradient(160deg, #12051f 0%, #2a0b52 45%, #4a1388 75%, #1d0840 100%);
+  }
+  .head { display: flex; align-items: center; justify-content: center; gap: 26px; padding-top: 36px; }
+  .head img { width: 96px; height: 96px; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .45)); }
+  .head h1 { font-size: 58px; font-weight: 600; letter-spacing: .5px; }
+  .sub { text-align: center; font-size: 21px; color: #e3cfff; margin-top: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(5, 340px); gap: 30px 24px; justify-content: center; margin-top: 30px; }
+  .frame {
+    position: relative; height: 196px; border-radius: 12px; overflow: hidden; border: 2px solid rgba(255, 255, 255, .85);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .45); background: #1a0b33;
+  }
+  .frame img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+  .frame img.crop { position: absolute; height: auto; max-width: none; object-fit: fill; }
+  .cap { display: flex; align-items: center; gap: 12px; margin-top: 13px; font-size: 19.5px; font-weight: 500; }
+  .cap::before { content: ""; width: 5px; height: 24px; border-radius: 3px; background: #c76bff; flex: none; }
+  .panel { height: 100%; padding: 18px 22px; background: linear-gradient(160deg, #2a1150, #170a30); }
+  .label { font-size: 13px; color: #c9a6f5; letter-spacing: .4px; text-transform: uppercase; }
+  .stats { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 10px 14px; border-radius: 10px; background: rgba(199, 107, 255, .14); border: 1px solid rgba(199, 107, 255, .45); }
+  .stat b { display: block; font-size: 25px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+  .stat span { font-size: 14px; color: #dcc6ff; }
+  .big { margin-top: 14px; font-size: 30px; font-weight: 700; white-space: nowrap; }
+  .big span { font-size: 18px; font-weight: 600; color: #e3cfff; margin-left: 10px; vertical-align: middle; }
+  .note { margin-top: 12px; font-size: 14px; color: #d2b8f7; }
+  .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips span { padding: 6px 11px; border-radius: 16px; background: rgba(199, 107, 255, .16); border: 1px solid rgba(199, 107, 255, .5); font-size: 13.5px; }
+  .file { margin-top: 8px; padding: 7px 14px; border-radius: 9px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); }
+  .file b { font-size: 16px; } .file div { font-size: 13px; color: #d2b8f7; margin-top: 2px; }
+  .swatches { margin-top: 16px; display: flex; justify-content: space-between; }
+  .swatches i { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .8); box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
+  .foot { text-align: center; margin-top: 30px; font-size: 19px; color: #e3cfff; }
+  .foot b { color: #fff; font-weight: 600; } .dot { color: #c76bff; margin: 0 12px; }
+</style></head>
+<body>
+  <div class="head"><img src="icon.png" alt=""><h1>MDM RT 1.1</h1></div>
+  <div class="sub">Mister Download Manager for Surface RT and Surface 2 on Windows RT 8.1 and Windows 10 ARM32, with an x64 build for PCs</div>
+  <div class="grid">
+    <div><div class="frame"><img class="crop" src="main.png" style="width: 1000px; left: 0; top: 0" alt=""></div><div class="cap">Mister Download Manager, in dark</div></div>
+    <div><div class="frame"><div class="panel">
+      <div class="label">Windows RT 8.1 &middot; Windows 10 ARM32</div>
+      <div class="stats">
+        <div class="stat"><b>Thumb-2</b><span>native ARM32</span></div>
+        <div class="stat"><b>ThinLTO</b><span>PGO · llvm-rt 2.4</span></div>
+      </div>
+      <div class="note">Drawn with OpenGL ES through ANGLE on Direct3D 9 or 11: Venetium's ANGLE.</div>
+    </div></div><div class="cap">Built for ARM32</div></div>
+    <div><div class="frame"><img class="crop" src="list.png" style="width: 560px; left: 0; top: -31px" alt=""></div><div class="cap">Fast, resumable downloads</div></div>
+    <div><div class="frame"><div class="panel">
+      <div class="label">Eight RT colours</div>
+      <div class="swatches"><i style="background:#a24bff"></i><i style="background:#3d8bff"></i><i style="background:#25dac9"></i><i style="background:#3ccf6e"></i><i style="background:#ff8a2b"></i><i style="background:#ff4d5e"></i><i style="background:#ff5fb7"></i><i style="background:#9aa0a6"></i></div>
+      <div class="note">7-Zip RT's dark look, Kodi RT's purple first. MDM's own themes are all there too.</div>
+    </div></div><div class="cap">Kodi RT purple, or another colour</div></div>
+    <div><div class="frame"><img class="crop" src="video.png" style="width: 520px; left: 0; top: -24px" alt=""></div><div class="cap">Videos with yt-dlp</div></div>
+    <div><div class="frame"><div class="panel">
+      <div class="label">Helpers that run on ARM32</div>
+      <div class="chips"><span>yt-dlp</span><span>Python 3.14 (Kodi RT)</span><span>QuickJS for YouTube</span><span>ffmpeg</span></div>
+      <div class="note">All in the Setup: nothing x86 is downloaded.</div>
+    </div></div><div class="cap">Video downloads on the tablet</div></div>
+    <div><div class="frame"><div class="panel">
+      <div class="label">The browser extension</div>
+      <div class="chips"><span>Venetium</span><span>Chrome</span><span>Edge</span><span>Brave</span><span>Firefox</span></div>
+      <div class="note">The Chrome Web Store extension hands downloads to MDM RT; Setup registers its host.</div>
+    </div></div><div class="cap">Catches downloads in Venetium</div></div>
+    <div><div class="frame"><img class="crop" src="options.png" style="width: 520px; left: 0; top: 0" alt=""></div><div class="cap">All of MDM's options</div></div>
+    <div><div class="frame"><img src="setup.png" alt=""></div><div class="cap">Per-user Setup, no admin</div></div>
+    <div><div class="frame"><div class="panel">
+      <div class="label">A fork of Mister Download Manager</div>
+      <div class="big" style="margin-top: 10px">1f241ae4 <span>+ 10 commits</span></div>
+      <div class="file"><b>arm32</b> &nbsp;&middot;&nbsp; <b>x64</b><div>Surface RT, Surface 2 &middot; 64-bit Windows</div></div>
+      <div class="note" style="margin-top: 8px">GNU GPL v3 or later, as upstream.</div>
+    </div></div><div class="cap">A real fork, on GitHub</div></div>
+  </div>
+  <div class="foot">Free and open source<span class="dot">&#9679;</span><b>github.com/hamed7ir/mdm-rt</b></div>
+</body></html>

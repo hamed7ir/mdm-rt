@@ -1,0 +1,16 @@
+[package]
+name = "pgotest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dep = { path = "dep" }
+
+[profile.rt-thin]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+panic = "abort"
+
+# its own workspace: it sits inside MDM's source tree but is not one of MDM's crates
+[workspace]

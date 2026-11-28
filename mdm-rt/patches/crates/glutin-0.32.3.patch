@@ -1,0 +1,19 @@
+diff --git a/src/api/egl/display.rs b/src/api/egl/display.rs
+index f392fce..308fca6 100644
+--- a/src/api/egl/display.rs
++++ b/src/api/egl/display.rs
+@@ -383,6 +383,14 @@ impl Display {
+             RawDisplayHandle::Windows(..) if extensions.contains("EGL_ANGLE_platform_angle") => {
+                 // Only CreateWindowSurface appears to work with Angle.
+                 legacy = true;
++                // MDM RT: MDM_ANGLE=d3d9 or d3d11 picks ANGLE's Direct3D renderer
++                // (EGL_PLATFORM_ANGLE_TYPE_ANGLE: D3D9 / D3D11). Without it ANGLE tries Direct3D 11,
++                // then 9 (Tegra's feature level 9_1 is too low for its Direct3D 11 renderer).
++                match std::env::var("MDM_ANGLE").map(|v| v.to_ascii_lowercase()).as_deref() {
++                    Ok("d3d9") => attrs.extend_from_slice(&[0x3203, 0x3207]),
++                    Ok("d3d11") => attrs.extend_from_slice(&[0x3203, 0x3208]),
++                    _ => {},
++                }
+                 (egl::PLATFORM_ANGLE_ANGLE, egl::DEFAULT_DISPLAY as *mut _)
+             },
+             _ => {

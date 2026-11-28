@@ -1,0 +1,28 @@
+diff --git a/deps/boringssl/crypto/thread_win.cc b/deps/boringssl/crypto/thread_win.cc
+--- a/deps/boringssl/crypto/thread_win.cc
++++ b/deps/boringssl/crypto/thread_win.cc
+@@ -121,7 +121,8 @@ static void NTAPI thread_local_destructor(PVOID module, DWORD reason,
+ // Note, in the prefixed build, |p_thread_callback_boringssl| may be a macro.
+ #define STRINGIFY(x) #x
+ #define EXPAND_AND_STRINGIFY(x) STRINGIFY(x)
+-#ifdef _WIN64
++// ARM32 Windows is 32-bit but, like x64/ARM64, uses undecorated C names.
++#if defined(_WIN64) || defined(_M_ARM)
+ __pragma(comment(linker, "/INCLUDE:_tls_used")) __pragma(comment(
+     linker, "/INCLUDE:" EXPAND_AND_STRINGIFY(p_thread_callback_boringssl)))
+ #else
+diff --git a/build/main.rs b/build/main.rs
+--- a/build/main.rs
++++ b/build/main.rs
+@@ -697,7 +697,10 @@
+         };
+ 
+     for subdir in subdirs {
+-        let dir = bssl_dir.join(subdir);
++        // MDM RT: the build folder itself without a trailing separator ("" joins as `...\build\`): rustc's
++        // linker response file quotes it as `"...\build\"`, and lld-link reads that `\"` as an escaped quote,
++        // which garbles every argument after it (ARM32: a long link goes through a response file).
++        let dir = if subdir.is_empty() { bssl_dir.to_path_buf() } else { bssl_dir.join(subdir) };
+         let dir = msvc_lib_subdir
+             .map(|s| dir.join(s))
+             .filter(|d| d.exists())

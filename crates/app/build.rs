@@ -38,8 +38,13 @@ fn main() {
         println!("cargo:rerun-if-changed=assets/icons/app/mdm.ico");
         let mut res = winresource::WindowsResource::new();
         res.set_icon("assets/icons/app/mdm.ico")
-            .set("ProductName", "Mister Download Manager")
-            .set("FileDescription", "Mister Download Manager")
+            // MDM RT: its own names (Task Manager shows the description) and version.
+            .set("ProductName", "Mister Download Manager RT")
+            .set("FileDescription", "MDM RT")
+            .set("ProductVersion", &rt_version())
+            .set("FileVersion", &rt_version())
+            .set_version_info(winresource::VersionInfo::PRODUCTVERSION, rt_version_u64())
+            .set_version_info(winresource::VersionInfo::FILEVERSION, rt_version_u64())
             .set("CompanyName", "Ahmed Nefzaoui")
             .set(
                 "LegalCopyright",
@@ -51,6 +56,7 @@ fn main() {
             println!("cargo:warning=exe icon not embedded: {e}");
         }
     }
+    rt_version_env();
 }
 
 /// Embed every translation catalog, `i18n/<locale>.tsv` at the repository root (craft-i18n's
@@ -160,4 +166,32 @@ fn commit() {
         .filter(|h| !h.is_empty())
         .unwrap_or_else(|| "unknown".into());
     println!("cargo:rustc-env=MDM_COMMIT={hash}");
+}
+
+/// MDM RT: the version the window title, About and the update check use (`MDM_RT_VERSION`,
+/// help::VERSION): its own release number since 1.1 (MDM_RT_VERSION, mdm-rt/build/build.py
+/// --version; 0.5.2 was upstream's version), else it
+/// is Cargo's.
+fn rt_version() -> String {
+    std::env::var("MDM_RT_VERSION")
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap_or_default())
+}
+
+fn rt_version_env() {
+    println!("cargo:rerun-if-env-changed=MDM_RT_VERSION");
+    println!("cargo:rustc-env=MDM_RT_VERSION={}", rt_version());
+}
+
+/// `rt_version` as the exe's fixed version info: four 16-bit numbers (1.1.0.0).
+#[cfg(windows)]
+fn rt_version_u64() -> u64 {
+    let mut parts: Vec<u64> = rt_version()
+        .split(['.', '-', '+'])
+        .map(|p| p.parse().unwrap_or(0))
+        .collect();
+    parts.resize(4, 0);
+    parts[..4].iter().fold(0, |v, p| (v << 16) | (p & 0xffff))
 }

@@ -5901,7 +5901,7 @@ fn reg_string(key: &str, name: &str) -> Option<String> {
 /// names have `_` for `-`.
 pub fn take_install_language() -> Option<String> {
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
-    const KEY: &str = r"Software\MisterDownloadManager";
+    const KEY: &str = r"Software\MDM RT";
     const NAME: &str = "InstallLanguage";
     let value = reg_string(KEY, NAME)?;
     let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
@@ -5918,7 +5918,7 @@ pub fn take_install_language() -> Option<String> {
 /// installer wrote it. Only read: the app settles Torrent settings' switch from it once
 /// (`Settings::settle_torrent_handler`, #1058), and an upgrade's value is never asked again.
 pub fn install_torrents() -> Option<bool> {
-    reg_string(r"Software\MisterDownloadManager", "InstallTorrents").map(|v| v.trim() == "1")
+    reg_string(r"Software\MDM RT", "InstallTorrents").map(|v| v.trim() == "1")
 }
 
 /// Is this program what Windows opens .torrent files with by their class (the user's or
@@ -6284,14 +6284,14 @@ pub fn play_sound(file: &str) {
 /// The name MDM is listed under in Windows' Default apps: its value in RegisteredApplications,
 /// the same as its Capabilities' ApplicationName (Microsoft: "ApplicationName must always match
 /// the name that is registered under RegisteredApplications"). tools/installer/mdm.iss writes
-/// the same.
-pub const REGISTERED_NAME: &str = "Mister Download Manager";
+/// the same. MDM RT: names of its own (registry, Default apps), beside an upstream MDM's.
+pub const REGISTERED_NAME: &str = "MDM RT";
 /// MDM's Capabilities (Default apps' list of what it can open), under HKCU or HKLM.
-const CAPABILITIES: &str = r"Software\MisterDownloadManager\Capabilities";
+const CAPABILITIES: &str = r"Software\MDM RT\Capabilities";
 /// The ProgIDs MDM's Capabilities name: Default apps wants an application-specific one for each
 /// file type and protocol, never the generic `magnet` class.
-const TORRENT_PROGID: &str = "MisterDownloadManager.Torrent";
-const MAGNET_PROGID: &str = "MisterDownloadManager.Magnet";
+const TORRENT_PROGID: &str = "MDMRT.Torrent";
+const MAGNET_PROGID: &str = "MDMRT.Magnet";
 
 /// Make MDM (on) or stop it being (off) what Windows opens magnet links and .torrent files
 /// with, for the current user (HKCU; no admin). Off removes only what points at us.
@@ -6572,11 +6572,11 @@ mod default_apps_tests {
     fn the_settings_page_names_the_registration() {
         assert_eq!(
             default_apps_uri(false),
-            "ms-settings:defaultapps?registeredAppUser=Mister%20Download%20Manager"
+            "ms-settings:defaultapps?registeredAppUser=MDM%20RT"
         );
         assert_eq!(
             default_apps_uri(true),
-            "ms-settings:defaultapps?registeredAppMachine=Mister%20Download%20Manager"
+            "ms-settings:defaultapps?registeredAppMachine=MDM%20RT"
         );
     }
 
@@ -6702,7 +6702,8 @@ fn run_value() -> Option<String> {
             .ok()
             .filter(|v| v.starts_with("MisterDownloadManagerTest"));
     }
-    Some("MisterDownloadManager".to_owned())
+    // MDM RT: a value of its own beside an upstream MDM's.
+    Some("MDM RT".to_owned())
 }
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -7769,7 +7770,8 @@ pub mod ole {
 /// with the process.
 pub fn mark_running() {
     use windows_sys::Win32::System::Threading::CreateMutexW;
-    let name: Vec<u16> = "MisterDownloadManager.Running\0".encode_utf16().collect();
+    // MDM RT: a name of its own: an upstream MDM's installer must not wait for MDM RT.
+    let name: Vec<u16> = "MDMRT.Running\0".encode_utf16().collect();
     // SAFETY: NUL-terminated name; the handle is deliberately kept for the process's life.
     unsafe {
         CreateMutexW(std::ptr::null(), 0, name.as_ptr());

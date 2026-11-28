@@ -1,12 +1,15 @@
 //! Mister Download Manager updating itself: how this copy was installed, the release file that
-//! replaces it, and that file fetched and checked against the release's SHA256SUMS.txt, whose
-//! signature by MDM's release key ([`crate::signed_by_mdm`]) is checked first. Putting the file
+//! replaces it, and that file fetched and checked against the release's SHA256SUMS.txt. MDM RT:
+//! its releases (github.com/hamed7ir/mdm-rt) carry no signature by MDM's release key, so the list
+//! must match the SHA-256 GitHub shows for it, and the file both its line there and its own
+//! GitHub digest (the release's `digest:<name>` entries, crates/app/src/help.rs), as 7-Zip RT
+//! checks its updates. Putting the file
 //! in place is the app's (`crates/app/src/update.rs`): it has to close itself to do it.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::{Error, signed_by_mdm, sum_for};
+use crate::{Error, sum_for};
 
 /// How this copy of MDM was installed: what an update replaces, and how.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,8 +54,9 @@ impl Install {
         };
         let dir = exe.parent().unwrap_or(Path::new("."));
         if cfg!(windows) {
-            // The installer leaves its uninstaller next to the program; the zips don't.
-            return if dir.join("unins000.exe").is_file() {
+            // The installer leaves its uninstaller next to the program; the zips don't. MDM RT's
+            // Setup leaves uninstall.exe.
+            return if dir.join("unins000.exe").is_file() || dir.join("uninstall.exe").is_file() {
                 Install::Installer
             } else {
                 Install::PlainZip
@@ -124,6 +128,12 @@ impl Install {
     /// then the `…-experimental` one of the releases before. None for a build from source, or for
     /// a processor MDM publishes nothing for (32-bit Linux or Mac; `None`, see [`Arch::THIS`]).
     pub fn assets_on(self, arch: Option<Arch>, version: &str) -> Vec<String> {
+        // MDM RT: its Setup per processor (mdm-rt/installer/build-installer.ps1), arm32 or x64; first, as
+        // 32-bit Arm has no `Arch`.
+        if self == Install::Installer {
+            let rt = if cfg!(target_arch = "arm") { "arm32" } else { "x64" };
+            return vec![format!("MDM-RT-Setup-{version}-{rt}.exe")];
+        }
         let Some(arch) = arch else {
             return Vec::new();
         };
@@ -265,15 +275,30 @@ pub async fn fetch(
             .ok_or_else(|| Error::Missing(file.to_owned()))
     };
     let client = crate::client(net, &url("SHA256SUMS.txt")?)?;
-    let sums = crate::signed_list(
-        &client,
-        &url("SHA256SUMS.txt")?,
-        &url("SHA256SUMS.txt.sig")?,
-        signed_by_mdm,
-    )
-    .await?;
+    // MDM RT: the SHA-256 GitHub shows for a release file ("digest:<name>": "sha256:<hex>").
+    let digest = |file: &str| -> Result<[u8; 32], Error> {
+        let key = format!("digest:{file}");
+        assets
+            .iter()
+            .find(|(n, _)| *n == key)
+            .and_then(|(_, d)| d.strip_prefix("sha256:"))
+            .and_then(|h| hex::decode(h).ok())
+            .and_then(|v| <[u8; 32]>::try_from(v).ok())
+            .ok_or_else(|| Error::Missing(format!("GitHub's checksum for {file}")))
+    };
+    let list = crate::get_bytes(&client, &url("SHA256SUMS.txt")?).await?;
+    {
+        use sha2::Digest as _;
+        if sha2::Sha256::digest(&list).as_slice() != digest("SHA256SUMS.txt")? {
+            return Err(Error::BadChecksum);
+        }
+    }
+    let sums = String::from_utf8_lossy(&list).into_owned();
     let expected =
         sum_for(&sums, name).ok_or_else(|| Error::Missing(format!("checksum for {name}")))?;
+    if expected != digest(name)? {
+        return Err(Error::BadChecksum);
+    }
     std::fs::create_dir_all(dir)?;
     let file = dir.join(name);
     // Downloaded under a name of its own, renamed once it checks out.
@@ -414,21 +439,34 @@ Connection: close
         base
     }
 
+    /// GitHub's digest of a fixture file: "sha256:<hex>".
+    fn digest_of(fixture: &str) -> String {
+        use sha2::Digest as _;
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(fixture);
+        format!("sha256:{}", hex::encode(sha2::Sha256::digest(std::fs::read(path).unwrap())))
+    }
+
+    /// MDM RT: the list must be the one GitHub vouches for (its digest), and a file must match
+    /// both its line in it and its own digest.
     #[tokio::test]
-    async fn a_release_file_is_taken_only_from_a_list_signed_by_mdm() {
+    async fn a_release_file_is_taken_only_from_a_list_github_vouches_for() {
         let zip = "MisterDownloadManager-9.9.9-x64.zip";
         let setup = "MisterDownloadManager-9.9.9-setup.exe";
         let assets = |base: &str| -> Vec<(String, String)> {
-            ["SHA256SUMS.txt", "SHA256SUMS.txt.sig", zip, setup]
+            let mut a: Vec<(String, String)> = ["SHA256SUMS.txt", zip, setup]
                 .iter()
                 .map(|n| (n.to_string(), format!("{base}/{n}")))
-                .collect()
+                .collect();
+            a.push(("digest:SHA256SUMS.txt".into(), digest_of("mdm-SHA256SUMS.txt")));
+            a.push((format!("digest:{zip}"), digest_of(zip)));
+            // As the list says (the file served under that name is another one).
+            a.push((format!("digest:{setup}"), format!("sha256:{}", "0".repeat(64))));
+            a
         };
         let base = serve(vec![
             ("SHA256SUMS.txt", "mdm-SHA256SUMS.txt"),
-            ("SHA256SUMS.txt.sig", "mdm-SHA256SUMS.txt.sig"),
             (zip, zip),
-            // Not what the signed list says it is.
+            // Not what the list says it is.
             (setup, "mdm-SHA256SUMS.txt"),
         ]);
         let dir = tempfile::tempdir().unwrap();
@@ -466,22 +504,20 @@ Connection: close
             .filter(|n| n.starts_with(setup))
             .collect();
         assert!(left.is_empty(), "{left:?}");
-        // A list signed by another key (yt-dlp's real one) is refused.
-        let base = serve(vec![
-            ("SHA256SUMS.txt", "SHA2-256SUMS"),
-            ("SHA256SUMS.txt.sig", "SHA2-256SUMS.sig"),
-            (zip, zip),
-        ]);
+        // Another list than the one GitHub vouches for (yt-dlp's) is refused.
+        let base = serve(vec![("SHA256SUMS.txt", "SHA2-256SUMS"), (zip, zip)]);
         let err = fetch(&assets(&base), zip, dir.path(), &net, &Progress::default()).await;
-        assert!(matches!(err, Err(Error::BadSignature)), "{err:?}");
+        assert!(matches!(err, Err(Error::BadChecksum)), "{err:?}");
     }
 
     #[test]
     fn every_kind_has_its_release_file() {
         let x64 = Some(Arch::X64);
+        // MDM RT's Setup, per processor (whatever processor is asked for).
+        let arch = if cfg!(target_arch = "arm") { "arm32" } else { "x64" };
         assert_eq!(
             Install::Installer.assets_on(x64, "0.2.2"),
-            ["MisterDownloadManager-0.2.2-setup.exe"]
+            [format!("MDM-RT-Setup-0.2.2-{arch}.exe")]
         );
         assert_eq!(
             Install::PortableZip.assets_on(x64, "0.2.2"),

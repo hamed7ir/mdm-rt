@@ -27,8 +27,8 @@ pub enum Next {
 }
 
 /// The release file this copy updates from, when `assets` (name, address) has it (by either of
-/// its names, [`Install::assets`]: the one for this build's own processor, x64, ARM64 or 32-bit)
-/// and the signature of the release's checksum list.
+/// its names, [`Install::assets`]: the one for this build's own processor) with the release's checksum list,
+/// and GitHub's SHA-256 of both (MDM RT: `digest:<name>` entries, crates/app/src/help.rs).
 pub fn asset_for(install: Install, version: &str, assets: &[(String, String)]) -> Option<String> {
     asset_on(install, Arch::THIS, version, assets)
 }
@@ -41,13 +41,13 @@ fn asset_on(
     assets: &[(String, String)],
 ) -> Option<String> {
     let has = |n: &str| assets.iter().any(|(a, _)| a == n);
-    if !(has("SHA256SUMS.txt") && has("SHA256SUMS.txt.sig")) {
+    if !(has("SHA256SUMS.txt") && has("digest:SHA256SUMS.txt")) {
         return None;
     }
     install
         .assets_on(arch, version)
         .into_iter()
-        .find(|n| has(n))
+        .find(|n| has(n) && has(&format!("digest:{n}")))
 }
 
 /// Where update files are kept until the next start.
@@ -166,19 +166,14 @@ fn apply(install: Install, file: &Path, cancelled: &AtomicBool) -> Result<Next, 
         Ok(Next::Restart)
     };
     match install {
-        // The installer closes MDM itself (/exit), installs where it was (the same install
-        // mode), and starts it again (/relaunch, tools/installer/mdm.iss).
+        // MDM RT's Setup waits for MDM RT to close, installs into its folder with the choices
+        // it has (--keep), and starts it again (--relaunch, mdm-rt/installer/Setup.cs).
         Install::Installer => {
             if cancelled.load(Ordering::Acquire) {
                 return Err("cancelled".into());
             }
             let mut cmd = Command::new(file);
-            cmd.args([
-                "/VERYSILENT",
-                "/SUPPRESSMSGBOXES",
-                "/NORESTART",
-                "/relaunch=1",
-            ]);
+            cmd.arg("--silent").arg(&dir).args(["--keep", "--relaunch"]);
             cmd.spawn().map_err(|e| e.to_string())?;
             Ok(Next::Restart)
         }
@@ -308,28 +303,29 @@ mod tests {
 
     const X64: Option<Arch> = Some(Arch::X64);
 
+    /// MDM RT: a release with this copy's Setup, the list, and GitHub's digests of both.
     #[test]
-    fn only_a_signed_release_with_this_copys_file_updates_it() {
+    fn only_a_vouched_release_with_this_copys_file_updates_it() {
         let a = |names: &[&str]| -> Vec<(String, String)> {
             names
                 .iter()
                 .map(|n| (n.to_string(), format!("https://x/{n}")))
                 .collect()
         };
-        let full = a(&[
-            "MisterDownloadManager-0.2.2-setup.exe",
-            "SHA256SUMS.txt",
-            "SHA256SUMS.txt.sig",
-        ]);
+        let arch = if cfg!(target_arch = "arm") { "arm32" } else { "x64" };
+        let setup = format!("MDM-RT-Setup-0.2.2-{arch}.exe");
+        let digest = |n: &str| (format!("digest:{n}"), format!("sha256:{}", "0".repeat(64)));
+        let mut full = a(&[setup.as_str(), "SHA256SUMS.txt"]);
+        full.extend([digest(&setup), digest("SHA256SUMS.txt")]);
         assert_eq!(
-            asset_on(Install::Installer, X64, "0.2.2", &full).as_deref(),
-            Some("MisterDownloadManager-0.2.2-setup.exe")
+            asset_for(Install::Installer, "0.2.2", &full).as_deref(),
+            Some(setup.as_str())
         );
-        // An unsigned release, another kind's file, a build from source: no.
-        let unsigned = a(&["MisterDownloadManager-0.2.2-setup.exe", "SHA256SUMS.txt"]);
-        assert_eq!(asset_on(Install::Installer, X64, "0.2.2", &unsigned), None);
-        assert_eq!(asset_on(Install::PortableZip, X64, "0.2.2", &full), None);
-        assert_eq!(asset_on(Install::Source, X64, "0.2.2", &full), None);
+        // No digests, another kind's file, a build from source: no.
+        let bare = a(&[setup.as_str(), "SHA256SUMS.txt"]);
+        assert_eq!(asset_for(Install::Installer, "0.2.2", &bare), None);
+        assert_eq!(asset_for(Install::PortableZip, "0.2.2", &full), None);
+        assert_eq!(asset_for(Install::Source, "0.2.2", &full), None);
     }
 
     /// Linux's and macOS's files lose "-experimental" in a release: a copy finds its file by
@@ -337,11 +333,15 @@ mod tests {
     #[test]
     fn a_release_names_linux_files_either_way() {
         let release = |names: &[&str]| -> Vec<(String, String)> {
-            names
+            let mut a: Vec<(String, String)> = names
                 .iter()
-                .chain(&["SHA256SUMS.txt", "SHA256SUMS.txt.sig"])
+                .chain(&["SHA256SUMS.txt"])
                 .map(|n| (n.to_string(), format!("https://x/{n}")))
-                .collect()
+                .collect();
+            let digests: Vec<(String, String)> =
+                a.iter().map(|(n, _)| (format!("digest:{n}"), "sha256:00".into())).collect();
+            a.extend(digests);
+            a
         };
         let old = "MisterDownloadManager-0.3.0-linux-x86_64-experimental.AppImage";
         let new = "MisterDownloadManager-0.3.0-linux-x86_64.AppImage";
@@ -362,13 +362,14 @@ mod tests {
             asset_on(Install::Deb, X64, "0.3.0", &release(&[new, deb])).as_deref(),
             Some(deb)
         );
-        // Unsigned: neither.
-        let unsigned = vec![(new.to_string(), format!("https://x/{new}"))];
-        assert_eq!(asset_on(Install::AppImage, X64, "0.3.0", &unsigned), None);
+        // Without the list and digests: neither.
+        let bare = vec![(new.to_string(), format!("https://x/{new}"))];
+        assert_eq!(asset_on(Install::AppImage, X64, "0.3.0", &bare), None);
     }
 
     /// A release with every processor's files: each copy takes its own processor's, an x64 copy
-    /// run emulated on an ARM PC x64's (until the ARM build is installed).
+    /// run emulated on an ARM PC x64's (until the ARM build is installed). MDM RT: with GitHub's
+    /// digests; its Setup has names of its own (`only_a_vouched_release_with_this_copys_file_updates_it`).
     #[test]
     fn each_processor_takes_its_own_file() {
         let names = [
@@ -386,17 +387,16 @@ mod tests {
             "MisterDownloadManager-1.0.0-linux-x86_64.deb",
             "MisterDownloadManager-1.0.0-linux-arm64.deb",
             "SHA256SUMS.txt",
-            "SHA256SUMS.txt.sig",
         ];
-        let assets: Vec<(String, String)> = names
+        let mut assets: Vec<(String, String)> = names
             .iter()
             .map(|n| (n.to_string(), format!("https://x/{n}")))
             .collect();
+        let digests: Vec<(String, String)> =
+            assets.iter().map(|(n, _)| (format!("digest:{n}"), "sha256:00".into())).collect();
+        assets.extend(digests);
         let (arm, x86) = (Some(Arch::Arm64), Some(Arch::X86));
         for (install, arch, want) in [
-            (Install::Installer, X64, "setup.exe"),
-            (Install::Installer, arm, "setup-arm64.exe"),
-            (Install::Installer, x86, "setup-x86.exe"),
             (Install::PortableZip, X64, "portable.zip"),
             (Install::PortableZip, arm, "portable-arm64.zip"),
             (Install::PortableZip, x86, "portable-x86.zip"),
@@ -420,7 +420,7 @@ mod tests {
             .filter(|(n, _)| !n.contains("arm64") && !n.contains("x86."))
             .cloned()
             .collect();
-        assert_eq!(asset_on(Install::Installer, arm, "1.0.0", &x64_only), None);
+        assert_eq!(asset_on(Install::PortableZip, arm, "1.0.0", &x64_only), None);
         assert_eq!(asset_on(Install::AppImage, arm, "1.0.0", &x64_only), None);
         // This build asks for its own processor's.
         assert_eq!(

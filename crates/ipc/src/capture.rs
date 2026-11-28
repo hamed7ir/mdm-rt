@@ -408,7 +408,10 @@ pub fn type_listed(types: &str, name: &str) -> bool {
 /// extension/background.js). Helium names itself Google Chrome on purpose.
 pub fn browser_named(user_agent: &str, brands: &[String]) -> &'static str {
     let brand = |b: &str| brands.iter().any(|x| x == b);
-    if brand("Zen") {
+    // MDM RT: Venetium names itself (its patch 0015: client hints' brand "Venetium").
+    if brand("Venetium") {
+        "Venetium"
+    } else if brand("Zen") {
         "Zen Browser"
     } else if brand("LibreWolf") {
         "LibreWolf"
@@ -589,6 +592,10 @@ mod tests {
             CHROME
         );
         assert_eq!(browser_named(CHROME_UA, &brands(&["Opera"])), "Opera");
+        assert_eq!(
+            browser_named(CHROME_UA, &brands(&["Not.A/Brand", "Chromium", "Venetium"])),
+            "Venetium"
+        );
         // #41: Firefox's forks by runtime.getBrowserInfo's name; Firefox itself by its UA.
         assert_eq!(browser_named(FIREFOX_UA, &brands(&["Zen"])), "Zen Browser");
         assert_eq!(

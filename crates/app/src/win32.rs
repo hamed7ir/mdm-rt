@@ -8442,6 +8442,17 @@ pub fn browsers() -> Vec<(String, std::path::PathBuf)> {
             add(name.to_owned(), std::path::PathBuf::from(path));
         }
     }
+    // MDM RT: Venetium's Setup registers only its uninstall entry (per user; everyone's too, for
+    // an install made elevated), with its folder.
+    const VENETIUM: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Venetium";
+    for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+        if let Some(dir) = reg_string_in(root, VENETIUM, "InstallLocation") {
+            let dir = dir.trim().trim_matches('"');
+            if !dir.is_empty() {
+                add("Venetium".to_owned(), std::path::Path::new(dir).join("venetium.exe"));
+            }
+        }
+    }
     out
 }
 

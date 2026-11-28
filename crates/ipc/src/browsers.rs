@@ -162,6 +162,11 @@ const fn gecko(
 
 /// Every browser MDM names, Chromium's first.
 pub const BROWSERS: &[Browser] = &[
+    // MDM RT: Venetium (github.com/hamed7ir/venetium), the Chromium of Windows RT 8.1 and Windows
+    // 10 ARM32 (Surface RT, Surface 2), first: on those tablets it is the browser. Windows only (a
+    // per-user Setup, %LOCALAPPDATA%\Programs\Venetium\venetium.exe); Chromium-branded, so it
+    // reads Chromium's native messaging key, then Chrome's (launch_context_win.cc).
+    chromium("Venetium", &[], &[], &[], &[]),
     // Each channel keeps its own folder (Chromium's chrome_paths_linux.cc and chrome_paths_mac.mm).
     chromium(
         "Google Chrome",
@@ -369,6 +374,7 @@ pub fn named(name: &str) -> Option<&'static Browser> {
 /// Windows: the programs of the browsers in the table, with the folder that tells apart those
 /// that share a program's name (Chrome, Chromium and Helium all install a `chrome.exe`).
 pub const WINDOWS_PROGRAMS: &[(&str, Option<&str>, &str)] = &[
+    ("venetium.exe", None, "Venetium"),
     ("chrome.exe", Some(r"\google\chrome\"), "Google Chrome"),
     ("chrome.exe", Some(r"\imput\helium\"), "Helium"),
     ("chrome.exe", Some(r"\chromium\"), "Chromium"),
@@ -1023,6 +1029,10 @@ mod tests {
             Some("Zen Browser")
         );
         assert_eq!(named(r"C:\x\unknown.exe"), None);
+        assert_eq!(
+            named(r"C:\Users\a\AppData\Local\Programs\Venetium\venetium.exe"),
+            Some("Venetium")
+        );
         for (_, _, name) in WINDOWS_PROGRAMS {
             assert!(super::named(name).is_some(), "{name} is in the table");
         }

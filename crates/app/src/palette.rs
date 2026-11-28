@@ -665,7 +665,7 @@ pub static CLASSIC: Theme = Theme {
 /// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
 /// users write, so they double as examples). Native follows the system and is made when chosen
 /// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 9] {
+pub fn builtins() -> [&'static Theme; 17] {
     static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin(
             "high-contrast",
@@ -694,6 +694,32 @@ pub fn builtins() -> [&'static Theme; 9] {
     static EMERALD: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin("emerald", include_str!("../assets/themes/emerald.toml"))
     });
+    // MDM RT: 7-Zip RT's dark look, Kodi RT's purple and 7-Zip RT's other accent colours
+    // (mdm-rt/branding/make-themes.py). After upstream's, so their places stay as they are.
+    static RT_PURPLE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-purple", include_str!("../assets/themes/rt-purple.toml"))
+    });
+    static RT_BLUE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-blue", include_str!("../assets/themes/rt-blue.toml"))
+    });
+    static RT_TEAL: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-teal", include_str!("../assets/themes/rt-teal.toml"))
+    });
+    static RT_GREEN: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-green", include_str!("../assets/themes/rt-green.toml"))
+    });
+    static RT_ORANGE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-orange", include_str!("../assets/themes/rt-orange.toml"))
+    });
+    static RT_RED: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-red", include_str!("../assets/themes/rt-red.toml"))
+    });
+    static RT_PINK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-pink", include_str!("../assets/themes/rt-pink.toml"))
+    });
+    static RT_GRAY: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("rt-gray", include_str!("../assets/themes/rt-gray.toml"))
+    });
     [
         &CLASSIC,
         &HIGH_CONTRAST,
@@ -704,6 +730,14 @@ pub fn builtins() -> [&'static Theme; 9] {
         &AERO,
         &AQUA,
         &EMERALD,
+        &RT_PURPLE,
+        &RT_BLUE,
+        &RT_TEAL,
+        &RT_GREEN,
+        &RT_ORANGE,
+        &RT_RED,
+        &RT_PINK,
+        &RT_GRAY,
     ]
 }
 

@@ -2128,9 +2128,20 @@ impl App {
         rt: tokio::runtime::Handle,
         commands: std::sync::mpsc::Receiver<ipc::Incoming>,
         sink: ipc::Sink,
-        loaded: store::Loaded,
+        mut loaded: store::Loaded,
         start: crate::Start,
     ) -> Self {
+        // MDM RT: the colour Setup offered, once (an RT theme; a portable copy reads no registry).
+        #[cfg(windows)]
+        if let Some(id) = mdm_ipc::portable_dir()
+            .is_none()
+            .then(crate::win32::take_install_theme)
+            .flatten()
+            .filter(|id| id.starts_with("rt-") && crate::palette::builtins().iter().any(|t| t.id == id.as_str()))
+        {
+            loaded.settings.theme = id;
+            loaded.settings.always_dark = true;
+        }
         // The look (#45): the chosen theme before anything is drawn.
         crate::theme::select(&crate::theme::startup_id(&loaded.settings.theme), ctx);
         crate::theme::apply(ctx);
@@ -10435,6 +10446,16 @@ impl App {
         let mut items = Vec::new();
         let mut files = false;
         let on = |id: &str| chosen == id;
+        // MDM RT: its own looks first (names, not translated), RT Purple the default.
+        items.push(Radio("RT Purple (Kodi RT)", Cmd::Theme("rt-purple"), true, on("rt-purple")));
+        items.push(Radio("RT Blue", Cmd::Theme("rt-blue"), true, on("rt-blue")));
+        items.push(Radio("RT Teal", Cmd::Theme("rt-teal"), true, on("rt-teal")));
+        items.push(Radio("RT Green", Cmd::Theme("rt-green"), true, on("rt-green")));
+        items.push(Radio("RT Orange", Cmd::Theme("rt-orange"), true, on("rt-orange")));
+        items.push(Radio("RT Red", Cmd::Theme("rt-red"), true, on("rt-red")));
+        items.push(Radio("RT Pink", Cmd::Theme("rt-pink"), true, on("rt-pink")));
+        items.push(Radio("RT Gray", Cmd::Theme("rt-gray"), true, on("rt-gray")));
+        items.push(Sep);
         // i18n: View → Theme: MDM's own look, the default (IDM's layout, Windows 11's controls)
         items.push(Radio("Classic", Cmd::Theme("classic"), true, on("classic")));
         // i18n: View → Theme: the system's own colours (its accent colour, its high contrast)

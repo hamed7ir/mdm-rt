@@ -1,0 +1,51 @@
+# RT Orange: one of MDM RT's built-in themes, 7-Zip RT's dark look (made by mdm-rt/branding/make-themes.py:
+# Kodi RT's purple palette, or its lightness and saturation in the accent's hue). Dark on both sides.
+
+name = "RT Orange"
+icons = "accent"
+
+[seeds.light]
+background = "#331d0b"
+surface = "#1f1105"
+header = "#402108"
+text = "#faefe6"
+accent = "#ff8a2b"
+selection = "#a86b3a"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[seeds.dark]
+background = "#331d0b"
+surface = "#1f1105"
+header = "#402108"
+text = "#faefe6"
+accent = "#ff8a2b"
+selection = "#a86b3a"
+error = "#ff8f9e"
+warning = "#ffc561"
+success = "#6ccb5f"
+
+[colors]
+"window" = "#331d0b"
+"text.muted" = "#ad917a"
+"selection.inactive" = "#634023"
+"field" = "#502d11"
+"field.border" = "#884713"
+"field.disabled" = "#402610"
+"group.line" = "#884713"
+"button" = "#502d11"
+"button.hot" = "#884713"
+"button.pressed" = "#a86b3a"
+"button.border" = "#884713"
+"button.bottom" = "#884713"
+"button.disabled" = "#402610"
+"button.default.border" = "#ff8a2b"
+"button.default.bottom" = "#ff8a2b"
+"link" = "#ffe5cf"
+"tab" = "#402108"
+"tab.page" = "#331d0b"
+"scroll.track" = "#1f1105"
+"scroll.thumb" = "#884713"
+"scroll.thumb.hot" = "#a86b3a"
+"scroll.thumb.pressed" = "#ff8a2b"

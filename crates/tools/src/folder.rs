@@ -36,6 +36,10 @@ pub(crate) const PROGRAM: &str = "yt-dlp.exe";
 pub(crate) const PROGRAM: &str = "yt-dlp_arm64.exe";
 #[cfg(all(windows, target_arch = "x86"))]
 pub(crate) const PROGRAM: &str = "yt-dlp_x86.exe";
+// MDM RT: yt-dlp has no 32-bit Arm Windows build (MDM RT brings its own, `crate::bundled`); a name, so that this
+// module builds there.
+#[cfg(all(windows, target_arch = "arm"))]
+pub(crate) const PROGRAM: &str = "yt-dlp.exe";
 #[cfg(not(windows))]
 pub(crate) const PROGRAM: &str = "yt-dlp_macos";
 /// What the folder build keeps beside its program; the one-file build has none.

@@ -221,6 +221,8 @@ pub fn look_up(
     url: &str,
     timeout: Duration,
 ) -> Result<LookedUp, ProcError> {
+    // MDM RT: never less than LOOKUP_TIMEOUT_MIN (minutes on a Windows RT tablet).
+    let timeout = timeout.max(crate::LOOKUP_TIMEOUT_MIN);
     // A plain file a server's program sends gets its real type (#695).
     let run = |args: &[String]| {
         quick_first(args, |args| {
@@ -1132,6 +1134,12 @@ pub fn system_js_runtimes(ytdlp: Option<&Path>) -> Vec<(crate::jsruntime::Kind, 
         && let Some(beside) = exe.parent()
     {
         dirs.push(beside.to_path_buf());
+    }
+    // MDM RT: and the QuickJS beside the bundled yt-dlp (`<program folder>\helpers`, [`crate::bundled`]).
+    if let (Some(helpers), Some(exe)) = (crate::bundled_dir(), ytdlp)
+        && exe.starts_with(&helpers)
+    {
+        dirs.push(helpers);
     }
     js_runtimes_in(&dirs, &runtime_dirs(), home_dir().as_deref())
 }

@@ -282,8 +282,10 @@ pub fn installed(dir: &Path) -> Option<Installed> {
     // Android: the APK's own (android.rs); none can be downloaded and run there.
     #[cfg(target_os = "android")]
     return own.or_else(crate::android::ffmpeg);
+    // MDM RT: else the one beside the program (`crate::bundled`), before the system's.
     #[cfg(not(target_os = "android"))]
-    own.or_else(|| crate::system::installed("ffmpeg"))
+    own.or_else(|| crate::bundled("ffmpeg"))
+        .or_else(|| crate::system::installed("ffmpeg"))
 }
 
 /// MDM's own install in `dir`.
@@ -304,6 +306,12 @@ pub async fn install_latest(
     // The person's own copy: theirs to update (#51).
     if let Some(mine) = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg) {
         return Ok(mine);
+    }
+    // MDM RT on 32-bit Arm: BtbN's builds don't run here; the one beside MDM RT comes with its updates.
+    if !crate::DOWNLOADS_RUN_HERE {
+        return crate::bundled("ffmpeg").ok_or_else(|| {
+            Error::Missing("ffmpeg for 32-bit Arm (MDM RT's Setup brings it)".into())
+        });
     }
     install_with(dir, net, progress, None).await?;
     own(dir).ok_or_else(|| Error::Missing("ffmpeg after its install".into()))

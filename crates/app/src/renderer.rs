@@ -114,8 +114,9 @@ pub const GPU: Option<Api> = if !cfg!(gpu) {
 /// (#89), OpenGL elsewhere (#206: Vulkan and Metal are choices until real cards have tried them).
 /// 32-bit Windows draws with OpenGL too: there wgpu's Direct3D 12 can't make egui's pipeline
 /// ("The parameter is incorrect", tried on an NVIDIA card), and the windows MDM opened after
-/// falling back stayed blank.
-pub const DEFAULT: Api = if cfg!(all(windows, not(target_arch = "x86"))) {
+/// falling back stayed blank. MDM RT: and so does a build without wgpu (32-bit Arm Windows:
+/// OpenGL ES through ANGLE).
+pub const DEFAULT: Api = if cfg!(all(windows, not(target_arch = "x86"))) && cfg!(gpu) {
     Api::Direct3D
 } else {
     Api::OpenGl
@@ -3365,6 +3366,8 @@ mod tests {
     /// The first frame's clock counts the API's time only: MDM's own work (making the app, its
     /// passes) is left out, so a slow start of MDM's isn't taken for Direct3D failing (#280: 10.7
     /// s from OpenGL's context to the first frame on the reporter's computer, at the 10 s limit).
+    // MDM RT: the 10 s limit is the wgpu path's (`cfg(gpu)`): the ARM32 build and its x86 test build have none.
+    #[cfg(gpu)]
     #[test]
     fn the_first_frame_clock_leaves_out_mdms_own_work() {
         use std::time::{Duration, Instant};

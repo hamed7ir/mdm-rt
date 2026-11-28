@@ -87,12 +87,6 @@ arboard.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
-# Windows can draw with Direct3D 12 instead of OpenGL (#89, renderer.rs): eframe's wgpu renderer
-# with wgpu's Direct3D 12 backend only (no Vulkan, no GL: OpenGL stays eframe's glow).
-eframe = { workspace = true, features = ["wgpu_no_default_features"] }
-# Cargo.lock keeps gpu-allocator (wgpu-hal's) on wgpu-hal's windows 0.62: its range allows 0.61 too,
-# which win32job uses, and wgpu-hal doesn't build with that one.
-wgpu = { version = "30.0", default-features = false, features = ["dx12", "wgsl"] }
 raw-window-handle = "0.6"
 # Latin, Greek and Cyrillic text drawn by DirectWrite as Windows' classic controls draw it
 # (win32.rs `text_rasterizer`): its COM interfaces, which windows-sys doesn't have. The windows
@@ -105,6 +99,16 @@ windows = { version = "0.62", default-features = false, features = ["std", "Win3
 windows-collections = { version = "0.3.2", default-features = false, features = ["std"] }
 windows-future = { version = "0.3.2", default-features = false, features = ["std"] }
 
+# Windows can draw with Direct3D 12 instead of OpenGL (#89, renderer.rs): eframe's wgpu renderer
+# with wgpu's Direct3D 12 backend only (no Vulkan, no GL: OpenGL stays eframe's glow).
+# MDM RT: not on 32-bit Arm. Windows RT has no Direct3D 12, and its graphics chips (Tegra, Adreno) stop at
+# Direct3D feature level 9_x; there MDM draws with OpenGL ES through ANGLE (build.rs leaves out `gpu`).
+# `--cfg mdm_rt_angle` draws the same way on x86/x64: MDM RT's test build of the ARM32 drawing path.
+[target.'cfg(all(windows, not(target_arch = "arm"), not(mdm_rt_angle)))'.dependencies]
+eframe = { workspace = true, features = ["wgpu_no_default_features"] }
+# Cargo.lock keeps gpu-allocator (wgpu-hal's) on wgpu-hal's windows 0.62: its range allows 0.61 too,
+# which win32job uses, and wgpu-hal doesn't build with that one.
+wgpu = { version = "30.0", default-features = false, features = ["dx12", "wgsl"] }
 # The notification-area icon and its menu (tray.rs); Android has none (tray/none.rs).
 [target.'cfg(not(any(target_os = "linux", target_os = "android")))'.dependencies]
 tray-icon = "0.26.1"

@@ -232,6 +232,113 @@ pub fn remove_owned_torrent_file(
 }
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+
+/// MDM RT: Windows 10's per-monitor DPI functions (1607: `GetDpiForWindow`, `AdjustWindowRectExForDpi`,
+/// `GetSystemMetricsForDpi`, `GetDpiForSystem`), looked up when first used, as winit and muda look them up: Windows RT 8.1 has
+/// none of them, and a program that imports them doesn't start there (MDM RT's ARM32 build runs on it).
+/// Without them: the window's monitor's DPI (`GetDpiForMonitor`, Windows 8.1), and the system DPI's frame
+/// and metrics scaled to it.
+#[allow(non_snake_case)]
+pub(crate) mod dpi10 {
+    use std::sync::OnceLock;
+    use windows_sys::Win32::Foundation::{HWND, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetDC, GetDeviceCaps, LOGPIXELSX, MONITOR_DEFAULTTONEAREST, MonitorFromWindow, ReleaseDC,
+    };
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+    use windows_sys::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        AdjustWindowRectEx, GetSystemMetrics, SYSTEM_METRICS_INDEX, WINDOW_EX_STYLE, WINDOW_STYLE,
+    };
+    use windows_sys::core::BOOL;
+
+    type DpiForWindow = unsafe extern "system" fn(HWND) -> u32;
+    type AdjustForDpi = unsafe extern "system" fn(*mut RECT, WINDOW_STYLE, BOOL, WINDOW_EX_STYLE, u32) -> BOOL;
+    type MetricsForDpi = unsafe extern "system" fn(SYSTEM_METRICS_INDEX, u32) -> i32;
+    type DpiForSystem = unsafe extern "system" fn() -> u32;
+
+    struct Fns {
+        dpi_for_window: Option<DpiForWindow>,
+        adjust: Option<AdjustForDpi>,
+        metrics: Option<MetricsForDpi>,
+        dpi_for_system: Option<DpiForSystem>,
+    }
+
+    fn fns() -> &'static Fns {
+        static F: OnceLock<Fns> = OnceLock::new();
+        F.get_or_init(|| {
+            let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
+            // SAFETY: user32 is loaded in every GUI process; the names are NUL-terminated, and each found
+            // function has the signature Windows documents for it.
+            unsafe {
+                let m = GetModuleHandleW(user32.as_ptr());
+                if m.is_null() {
+                    return Fns { dpi_for_window: None, adjust: None, metrics: None, dpi_for_system: None };
+                }
+                let get = |name: &[u8]| GetProcAddress(m, name.as_ptr());
+                Fns {
+                    dpi_for_window: get(b"GetDpiForWindow\0").map(|f| std::mem::transmute::<_, DpiForWindow>(f)),
+                    adjust: get(b"AdjustWindowRectExForDpi\0").map(|f| std::mem::transmute::<_, AdjustForDpi>(f)),
+                    metrics: get(b"GetSystemMetricsForDpi\0").map(|f| std::mem::transmute::<_, MetricsForDpi>(f)),
+                    dpi_for_system: get(b"GetDpiForSystem\0").map(|f| std::mem::transmute::<_, DpiForSystem>(f)),
+                }
+            }
+        })
+    }
+
+    /// The screen's DPI (the system DPI), 96 when unknown.
+    fn system_dpi() -> u32 {
+        // SAFETY: the screen's DC, released at once.
+        unsafe {
+            let dc = GetDC(std::ptr::null_mut());
+            let d = GetDeviceCaps(dc, LOGPIXELSX as _);
+            ReleaseDC(std::ptr::null_mut(), dc);
+            if d > 0 { d as u32 } else { 96 }
+        }
+    }
+
+    pub unsafe fn GetDpiForWindow(hwnd: HWND) -> u32 {
+        if let Some(f) = fns().dpi_for_window {
+            return unsafe { f(hwnd) };
+        }
+        let (mut x, mut y) = (0u32, 0u32);
+        // SAFETY: a monitor handle Windows gives for the window, and two out values.
+        let ok = unsafe {
+            GetDpiForMonitor(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &mut x, &mut y)
+        };
+        if ok == 0 && x > 0 { x } else { system_dpi() }
+    }
+
+    pub unsafe fn AdjustWindowRectExForDpi(
+        rc: *mut RECT,
+        style: WINDOW_STYLE,
+        menu: BOOL,
+        ex: WINDOW_EX_STYLE,
+        dpi: u32,
+    ) -> BOOL {
+        if let Some(f) = fns().adjust {
+            return unsafe { f(rc, style, menu, ex, dpi) };
+        }
+        // Windows 8.1 scales no window frame per monitor: the system DPI's frame is the one drawn.
+        let _ = dpi;
+        unsafe { AdjustWindowRectEx(rc, style, menu, ex) }
+    }
+
+    pub unsafe fn GetSystemMetricsForDpi(index: SYSTEM_METRICS_INDEX, dpi: u32) -> i32 {
+        if let Some(f) = fns().metrics {
+            return unsafe { f(index, dpi) };
+        }
+        let v = unsafe { GetSystemMetrics(index) };
+        (v as i64 * dpi as i64 / system_dpi().max(1) as i64) as i32
+    }
+
+    pub unsafe fn GetDpiForSystem() -> u32 {
+        if let Some(f) = fns().dpi_for_system {
+            return unsafe { f() };
+        }
+        system_dpi()
+    }
+}
 use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, DeleteObject, GetDC, GetDIBits, ReleaseDC,
 };
@@ -248,7 +355,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WM_NCCALCSIZE, WM_NCHITTEST, WS_EX_DLGMODALFRAME,
     WS_THICKFRAME,
 };
-
 /// 32-bit Windows: `SetWindowLongPtrW` is `SetWindowLongW` there, whose value is 32 bits (all a
 /// pointer is on it); taking a pointer-sized value as the 64-bit one does, the calls below are the
 /// same on both.
@@ -894,7 +1000,7 @@ fn client_px(client: [f32; 2], scale: f32) -> [i32; 2] {
 /// # Safety
 /// `hwnd` is a window of this thread.
 unsafe fn size_to_client(hwnd: HWND, style: u32, ex: u32, client: [i32; 2]) {
-    use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+    use crate::win32::dpi10::{AdjustWindowRectExForDpi, GetDpiForWindow};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetClientRect, GetWindowRect, IsIconic, IsZoomed,
     };
@@ -1515,7 +1621,7 @@ unsafe fn dwm_frame_off(hwnd: HWND, caption: bool) {
 /// # Safety
 /// `hwnd` is a window of this thread.
 unsafe fn drawn_frame_edges(hwnd: HWND, kind: Drawn) -> [i32; 4] {
-    use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+    use crate::win32::dpi10::{AdjustWindowRectExForDpi, GetDpiForWindow};
     // SAFETY: (the caller's) our own window; the rectangle is a local.
     unsafe {
         let style = drawn_style(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, kind);
@@ -2891,7 +2997,7 @@ pub fn tray_icon_tip(hwnd: isize, id: u32, tip: &str) -> bool {
 /// display's scale as soon as it changes. With no taskbar (Explorer isn't running), the system
 /// DPI. Never waits: Explorer is sent no message.
 pub fn tray_icon_px() -> (isize, u32) {
-    use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
+    use crate::win32::dpi10::{GetDpiForSystem, GetDpiForWindow};
     use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
     let class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
     // SAFETY: a NUL-ended class name and no title: no window is sent a message.
@@ -2914,7 +3020,7 @@ pub fn tray_icon_px() -> (isize, u32) {
 
 /// Windows' small icon size at `dpi` (`GetSystemMetricsForDpi(SM_CXSMICON)`), if it says.
 pub fn small_icon_px_for_dpi(dpi: u32) -> Option<u32> {
-    use windows_sys::Win32::UI::HiDpi::GetSystemMetricsForDpi;
+    use crate::win32::dpi10::GetSystemMetricsForDpi;
     use windows_sys::Win32::UI::WindowsAndMessaging::SM_CXSMICON;
     // SAFETY: a plain query.
     let px = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, dpi) };

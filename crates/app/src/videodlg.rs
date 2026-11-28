@@ -42,7 +42,7 @@ pub struct VideoAdd {
     /// the page had no subtitles to choose from (the last real choice stays).
     pub remember: Option<Subs>,
     /// The browser's quality menu's look-up the choice was made from, for the download's first
-    /// run (videolookup.rs); none from this window, whose download looks the page up itself.
+    /// run (videolookup.rs). MDM RT: this window's own look-up too (`VideoDialog::kept`).
     pub preloaded: Option<mdm_tools::video::Preloaded>,
     /// The user typed the file name (#1102): kept as typed; else it is the page's title, which
     /// is shortened to fit the path limits.
@@ -98,6 +98,10 @@ pub struct VideoDialog {
     sound: bool,
     name: String,
     lookup: Option<Slot<(Looked, Option<Declared>)>>,
+    /// MDM RT: yt-dlp's answer for the address in `looked_up`, kept for the download started from it
+    /// (`Preloaded`, as the browser's quality menu keeps its own): on a Windows RT tablet each look-up
+    /// takes a minute or more.
+    kept: Option<mdm_tools::video::InfoSlot>,
     /// The video the page looked up declares its own (#1076): what the download is added with
     /// (its address, the page as its Referer), while the address is still the one looked up.
     declared: Option<Declared>,
@@ -218,6 +222,7 @@ impl VideoDialog {
             folder,
             name: String::new(),
             lookup: None,
+            kept: None,
             declared: None,
             looking: None,
             list: None,
@@ -588,6 +593,19 @@ impl VideoDialog {
             Some((address, d)) => (address, declared_context(&self.context(), d)),
             None => (page, self.context()),
         };
+        // MDM RT: this window's look-up for the download's first run (`Preloaded`, as the browser's
+        // quality menu's; app.rs takes it for a download started now, while fresh). Not for a part,
+        // nor for the video a page declares (another address than the one looked up).
+        let preloaded = self
+            .kept
+            .clone()
+            .filter(|_| self.looked_up == self.page.trim() && self.declared.is_none() && part.is_none())
+            .map(|slot| mdm_tools::video::Preloaded {
+                slot,
+                selector: c.selector.clone(),
+                label: c.label.clone(),
+                merge: self.tools.as_ref().is_some_and(|t| t.2.is_some()),
+            });
         Some(VideoOut::One(Box::new(VideoAdd {
             page,
             selector: c.selector.clone(),
@@ -606,7 +624,7 @@ impl VideoDialog {
                 subs_for_choice(c, &chosen)
             },
             remember: (!self.subs.is_empty()).then_some(chosen),
-            preloaded: None,
+            preloaded,
             named,
             duration: whole_seconds(duration),
             part,
@@ -780,8 +798,11 @@ impl VideoDialog {
             );
             let browser = from_browser(&self.context());
             self.looking = Some((exe.clone(), browser.clone()));
+            // MDM RT: the answer kept for the download (see `kept`).
+            let kept = mdm_tools::video::InfoSlot::new(std::time::Instant::now());
+            self.kept = Some(kept.clone());
             std::thread::spawn(move || {
-                let res = look_up(&exe, &page, &browser, &rt);
+                let res = look_up(&exe, &page, &browser, &rt, Some(&kept));
                 *out.lock().unwrap() = Some(res);
                 ctx.request_repaint();
             });
@@ -1806,13 +1827,21 @@ pub(crate) fn look_up(
     page: &str,
     browser: &mdm_tools::proc::FromBrowser,
     rt: &tokio::runtime::Handle,
+    kept: Option<&mdm_tools::video::InfoSlot>,
 ) -> Result<(Looked, Option<Declared>), String> {
     let reader = mdm_tools::streams::Engine {
         handle: rt.clone(),
         opts: crate::settings::own_net(),
     };
-    let (mut looked, _, declared) =
-        mdm_tools::declared::look_up(exe, page, browser, &reader).map_err(|e| e.to_string())?;
+    let res = mdm_tools::declared::look_up(exe, page, browser, &reader);
+    // MDM RT: yt-dlp's answer kept for the download (`kept`), when it is the page's own (no declared video).
+    if let Some(k) = kept {
+        match &res {
+            Ok((_, out, None)) => k.fill(out.json.clone(), out.without_cookies),
+            _ => k.fail(),
+        }
+    }
+    let (mut looked, _, declared) = res.map_err(|e| e.to_string())?;
     if let Looked::Video(v) = &mut looked
         && v.needs_size()
     {

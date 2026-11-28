@@ -2770,7 +2770,11 @@ fn attempt(
     let failed = |error: String, rerouted: bool| Attempt::Failed { error, rerouted };
     cookies.droppable.set(false);
     let page = match preloaded.and_then(|p| preloaded_page(p, progress)) {
-        Some(page) => Ok(page),
+        Some(page) => {
+            // MDM RT: said, as each look-up takes a minute or more on a Windows RT tablet.
+            note(progress, "Started from the look-up already made (no second look-up)".into());
+            Ok(page)
+        }
         // Stopped while waiting for it: nothing more to do.
         None if progress.lock().unwrap().state == State::Stopped => return Attempt::Stopped,
         None => look_up(exe, url, &cookies.args(browser)),

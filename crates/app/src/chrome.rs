@@ -1693,6 +1693,11 @@ fn popup_level<C: Clone>(
             .flatten()
             .map(|r| r.translate(o.to_vec2() - screen.min.to_vec2()));
         let clicked = ui.input(|i| i.pointer.primary_released());
+        // MDM RT: where that release happened. A finger lifted from a touch screen ends the
+        // pointer in the same frame (egui's PointerGone), so `pointer` is None when it is
+        // released and no item was ever chosen by touch (Windows RT tablets); egui keeps the
+        // touch's place for this in `interact_pos`. With a mouse it is the pointer's place.
+        let released_at = ui.input(|i| i.pointer.interact_pos()).or(pointer);
         // The pointer moving over an item takes the highlight from the keyboard.
         let moving = ui.input(|i| i.pointer.is_moving());
         // For screen readers and UI Automation (#113): the window is a menu, its entries its
@@ -1726,6 +1731,8 @@ fn popup_level<C: Clone>(
             };
             let slot = Rect::from_min_max(pos2(o.x + 6.0, y), pos2(o.x + w - 6.0, y + SLOT));
             let hovered = pointer.is_some_and(|p| slot.contains(p));
+            // MDM RT: released on this item (a click, or a tap: `released_at`).
+            let tapped = clicked && released_at.is_some_and(|p| slot.contains(p));
             if hovered && moving && kb.is_some() && kb != Some(i) {
                 ui.ctx().data_mut(|d| {
                     let (a, b) = d
@@ -1909,7 +1916,7 @@ fn popup_level<C: Clone>(
                         ],
                         Stroke::new(1.2, glyph),
                     );
-                    if depth == 0 && enabled && hovered && (kb.is_none() || moving) {
+                    if depth == 0 && enabled && (hovered && (kb.is_none() || moving) || tapped) {
                         ui.ctx().data_mut(|d| d.insert_temp(sub_key, i));
                     }
                     if depth == 0
@@ -1956,7 +1963,7 @@ fn popup_level<C: Clone>(
                     } else if depth == 0 {
                         ui.ctx().data_mut(|d| d.remove::<f64>(since_key));
                     }
-                    if hovered && clicked && enabled {
+                    if tapped && enabled {
                         *result = Some(c.clone());
                     }
                 }

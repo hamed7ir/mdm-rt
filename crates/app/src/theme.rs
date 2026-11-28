@@ -1973,8 +1973,68 @@ pub fn apply(ctx: &egui::Context) {
         // be checked with DWM again and again (#633).
         o.sync_window_theme = false;
     });
+    // MDM RT: but a finger held still opens the context menu (`TouchHold`).
+    ctx.add_plugin(TouchHold::default());
     egui_extras::install_image_loaders(ctx);
     apply_theme(ctx);
+}
+
+/// MDM RT: press-and-hold on a touch screen opens the context menu, as in Windows (the download
+/// list's, the categories', every right-click menu): egui's secondary click for a touch held
+/// still (`Response::long_touched`). egui times the hold with the click's own limit, which
+/// `apply` lifts so that a held mouse button stays a click, and with it press-and-hold was gone
+/// on the Windows RT tablets. While the pointer is a finger (or a pen), egui's limit applies
+/// again, with a finger's leeway: a finger held still drifts more than a mouse. Every window's
+/// input passes here before its pass reads the options (`egui::Plugin::input_hook`); a pass
+/// without pointer input (the frame egui wakes for during a hold) keeps the last kind.
+#[derive(Default)]
+struct TouchHold {
+    touch: bool,
+}
+
+/// How long a finger held still is a press-and-hold (egui's own click limit; Windows' is about
+/// as long).
+const TOUCH_HOLD_SECS: f64 = 0.8;
+
+/// How far a finger may drift (points) and still tap or hold: egui's 6 suits a mouse; Android's
+/// touch slop is 8 dp, and on a Surface RT 6 points are about a millimetre.
+const TOUCH_SLOP: f32 = 10.0;
+
+impl egui::Plugin for TouchHold {
+    fn debug_name(&self) -> &'static str {
+        "mdm-touch-hold"
+    }
+
+    fn input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        use egui::Event;
+        if input.events.iter().any(|e| matches!(e, Event::Touch { .. })) {
+            self.touch = true;
+        } else if input.events.iter().any(|e| {
+            matches!(
+                e,
+                Event::PointerMoved(_) | Event::PointerButton { .. } | Event::MouseWheel { .. }
+            )
+        }) {
+            self.touch = false;
+        }
+        let want = if self.touch {
+            (TOUCH_HOLD_SECS, TOUCH_SLOP)
+        } else {
+            (f64::INFINITY, egui::InputOptions::default().max_click_dist)
+        };
+        let now = ctx.options(|o| {
+            (
+                o.input_options.max_click_duration,
+                o.input_options.max_click_dist,
+            )
+        });
+        if now != want {
+            ctx.options_mut(|o| {
+                o.input_options.max_click_duration = want.0;
+                o.input_options.max_click_dist = want.1;
+            });
+        }
+    }
 }
 
 /// egui's own visuals from the active theme: each variant into its egui theme (the mode
@@ -3156,5 +3216,121 @@ mod status_width_tests {
             }
         }
         println!("widest: {} px, {}", widest.0, widest.1);
+    }
+}
+
+/// MDM RT: a finger held still is a secondary click (the context menu), a held mouse button
+/// still a click (`TouchHold`).
+#[cfg(test)]
+mod touch_hold_tests {
+    use super::TouchHold;
+    use egui::{Event, PointerButton, Pos2, TouchPhase, pos2};
+
+    /// One pass at `time` with `events`, a control sensing clicks and drags (as the download list)
+    /// over the whole window: whether it was clicked, and secondary-clicked.
+    fn pass(ctx: &egui::Context, time: f64, events: Vec<Event>) -> (bool, bool) {
+        let input = egui::RawInput {
+            time: Some(time),
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(400.0, 300.0))),
+            events,
+            ..Default::default()
+        };
+        let mut got = (false, false);
+        let _ = ctx.run_ui(input, |ui| {
+            let r = ui.interact(
+                ui.max_rect(),
+                egui::Id::unique("touch-hold-list"),
+                egui::Sense::click_and_drag(),
+            );
+            got = (r.clicked(), r.secondary_clicked());
+        });
+        got
+    }
+
+    /// A context as `apply` leaves it for input (without loading the fonts), its first pass made.
+    fn context() -> egui::Context {
+        let ctx = egui::Context::default();
+        ctx.options_mut(|o| o.input_options.max_click_duration = f64::INFINITY);
+        ctx.add_plugin(TouchHold::default());
+        pass(&ctx, 0.0, Vec::new());
+        ctx
+    }
+
+    /// What egui-winit sends for a finger: the touch, and the pointer it moves.
+    fn touch(phase: TouchPhase, at: Pos2) -> Vec<Event> {
+        let mut events = vec![Event::Touch {
+            device_id: egui::TouchDeviceId(1),
+            id: egui::TouchId(7),
+            phase,
+            pos: at,
+            force: None,
+        }];
+        let button = |pressed| Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        match phase {
+            TouchPhase::Start => events.extend([Event::PointerMoved(at), button(true)]),
+            TouchPhase::Move => events.push(Event::PointerMoved(at)),
+            TouchPhase::End => events.extend([button(false), Event::PointerGone]),
+            TouchPhase::Cancel => events.push(Event::PointerGone),
+        }
+        events
+    }
+
+    fn mouse(at: Pos2, pressed: bool) -> Vec<Event> {
+        vec![
+            Event::PointerMoved(at),
+            Event::PointerButton {
+                pos: at,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            },
+        ]
+    }
+
+    #[test]
+    fn a_finger_held_still_opens_the_context_menu_and_letting_go_clicks_nothing() {
+        let ctx = context();
+        let at = pos2(100.0, 100.0);
+        assert_eq!(pass(&ctx, 1.0, touch(TouchPhase::Start, at)), (false, false));
+        assert_eq!(pass(&ctx, 1.5, Vec::new()), (false, false), "held 0.5 s: nothing yet");
+        // The pass egui wakes the app for (no input), once the hold is long enough.
+        assert_eq!(pass(&ctx, 1.9, Vec::new()), (false, true), "held 0.9 s: the menu");
+        assert_eq!(pass(&ctx, 2.0, Vec::new()), (false, false), "once");
+        assert_eq!(pass(&ctx, 2.4, touch(TouchPhase::End, at)), (false, false), "no click after it");
+    }
+
+    #[test]
+    fn a_finger_may_drift_a_little_while_held() {
+        let ctx = context();
+        assert_eq!(pass(&ctx, 1.0, touch(TouchPhase::Start, pos2(100.0, 100.0))), (false, false));
+        // 8 points: more than egui's 6 for a mouse, less than a finger's leeway.
+        pass(&ctx, 1.2, touch(TouchPhase::Move, pos2(108.0, 100.0)));
+        assert_eq!(pass(&ctx, 1.9, Vec::new()), (false, true));
+    }
+
+    #[test]
+    fn a_tap_is_a_click() {
+        let ctx = context();
+        let at = pos2(50.0, 60.0);
+        pass(&ctx, 1.0, touch(TouchPhase::Start, at));
+        assert_eq!(pass(&ctx, 1.2, touch(TouchPhase::End, at)), (true, false));
+    }
+
+    /// As in Windows: a held mouse button is still a click when let go over the control, also
+    /// after the finger was used.
+    #[test]
+    fn a_held_mouse_button_is_still_a_click() {
+        let ctx = context();
+        let at = pos2(200.0, 150.0);
+        pass(&ctx, 1.0, touch(TouchPhase::Start, at));
+        assert_eq!(pass(&ctx, 1.2, touch(TouchPhase::End, at)), (true, false));
+        pass(&ctx, 2.0, mouse(at, true));
+        assert_eq!(pass(&ctx, 3.5, Vec::new()), (false, false), "held 1.5 s: no menu");
+        assert_eq!(pass(&ctx, 4.0, mouse(at, false)), (true, false), "a click");
     }
 }

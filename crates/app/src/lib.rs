@@ -443,6 +443,9 @@ fn app() -> eframe::Result {
         }
         default_hook(info);
     }));
+    // MDM RT: and what Rust prints when it aborts (no panic: a failed allocation) to a log.
+    #[cfg(windows)]
+    win32::stderr_to_log();
 
     // IDM-style command line; hand it to a running instance if there is one.
     let args: Vec<String> = std::env::args().skip(1).collect();

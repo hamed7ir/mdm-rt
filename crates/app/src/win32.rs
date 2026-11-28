@@ -8392,6 +8392,62 @@ fn reg_subkeys(root: windows_sys::Win32::System::Registry::HKEY, key: &str) -> V
     out
 }
 
+/// MDM RT: which renderer ANGLE is to use (`MDM_ANGLE`: d3d9 or d3d11), read by glutin when it
+/// makes the display (patches/crates/glutin-0.32.3.patch): renderer.rs' tries on a Tegra.
+pub fn set_angle_platform(m: &str) {
+    // SAFETY: set before the try's window and display exist; Windows' environment calls are
+    // serialized, and nothing else reads MDM_ANGLE.
+    unsafe { std::env::set_var("MDM_ANGLE", m) };
+}
+
+/// MDM RT: a plain message box, owned by no window (for when MDM's window never came).
+pub fn message_box(title: &str, text: &str) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let (t, x) = (wide(title), wide(text));
+    // SAFETY: two NUL-terminated UTF-16 strings that outlive the call.
+    unsafe { MessageBoxW(std::ptr::null_mut(), x.as_ptr(), t.as_ptr(), MB_OK | MB_ICONERROR) };
+}
+
+/// MDM RT: what Rust writes to stderr when it ends a windowed program (which has no stderr):
+/// a failed memory allocation's "memory allocation of N bytes failed", a panic's message. It
+/// goes to `<data folder>\logs\stderr.log` instead: on Windows RT 8.1 the crash monitor can't
+/// run (minidumper needs Windows 10 1803's AF_UNIX sockets), so this is a crash's only trace
+/// there. Only when there is no stderr (one a console gave stays).
+pub fn stderr_to_log() {
+    use std::io::Write;
+    use std::os::windows::io::IntoRawHandle;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, SetStdHandle};
+    // SAFETY: a query of this process's standard error handle.
+    let current = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+    if !current.is_null() && current != INVALID_HANDLE_VALUE {
+        return;
+    }
+    let Some(dir) = mdm_ipc::data_dir().map(|d| d.join("logs")) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("stderr.log");
+    // Kept small: started afresh once it passes 1 MB.
+    let big = std::fs::metadata(&path).is_ok_and(|m| m.len() > 1 << 20);
+    let mut open = std::fs::OpenOptions::new();
+    open.create(true);
+    if big {
+        open.write(true).truncate(true);
+    } else {
+        open.append(true);
+    }
+    let Ok(mut f) = open.open(&path) else {
+        return;
+    };
+    let _ = writeln!(f, "--- MDM RT {} started, process {}", env!("MDM_RT_VERSION"), std::process::id());
+    // Never closed: it is the process's stderr from now on.
+    let h = f.into_raw_handle();
+    // SAFETY: an open file handle, kept for the life of the process.
+    unsafe { SetStdHandle(STD_ERROR_HANDLE, h as _) };
+}
+
 /// The browsers installed, by name, with their program: those Windows lists for "default
 /// browser" (StartMenuInternet, this user's then everyone's), named by their program
 /// (mdm_ipc::browsers::windows_named: Helium's chrome.exe isn't Chrome) or else by their own

@@ -1992,30 +1992,63 @@ pub fn run<A: eframe::App + 'static>(
                 gpu::watch_first_frame(way, this_try);
             }
         }
-        let mut opts = options();
-        configure(&mut opts, attempt);
-        tracing::info!("drawing with {}", attempt.name());
-        let make = creator.clone();
-        let gl_checked = plan.gl_checked;
-        // Why this way: the plan's reason for its first, the last one's failure for another.
-        let why_not = match &instead {
-            Some(w) => w.clone(),
-            None => plan.because.words(GPU.map_or("", |g| g.name())),
-        };
-        result = eframe::run_native(
-            name,
-            opts,
-            Box::new(move |cc| {
-                let make = make.borrow_mut().take().ok_or("the app was already made")?;
-                started(cc, attempt, why_not, gl_checked);
-                pacing_known(cc);
-                // Making the app is MDM's own work, not the API's: off the first frame's clock.
-                own_work_begin();
-                let app = make(cc);
-                own_work_end();
-                Ok(Box::new(app))
-            }),
-        );
+        // MDM RT: on ANGLE (the ARM32 build, the x86 test build) OpenGL ES is the only way to
+        // draw, and ANGLE's default display (Direct3D 11, else 9) finds no window config on a
+        // Surface RT (Tegra 3: "Found no glutin configs", and MDM was gone; it started only with
+        // MDM_ANGLE=d3d9). Tried again with ANGLE told Direct3D 9, then 11 (glutin's MDM_ANGLE);
+        // not when MDM_ANGLE was set by hand. The default stays first: an Adreno draws right
+        // only on Direct3D 11 (feature level 9_3), and wrong, not failing, on 9.
+        #[cfg(any(target_arch = "arm", mdm_rt_angle))]
+        let angle: &[Option<&str>] =
+            if attempt == Attempt::OpenGl && std::env::var_os("MDM_ANGLE").is_none() {
+                &[None, Some("d3d9"), Some("d3d11")]
+            } else {
+                &[None]
+            };
+        #[cfg(not(any(target_arch = "arm", mdm_rt_angle)))]
+        let angle: &[Option<&str>] = &[None];
+        for (k, mode) in angle.iter().enumerate() {
+            if let Some(m) = mode {
+                #[cfg(windows)]
+                crate::win32::set_angle_platform(m);
+                tracing::info!("drawing with {}, ANGLE on {m} (try {})", attempt.name(), k + 1);
+            } else if let Some(m) = std::env::var_os("MDM_ANGLE").filter(|_| attempt == Attempt::OpenGl) {
+                tracing::info!("drawing with {} (MDM_ANGLE={})", attempt.name(), m.to_string_lossy());
+            } else {
+                tracing::info!("drawing with {}", attempt.name());
+            }
+            let mut opts = options();
+            configure(&mut opts, attempt);
+            let make = creator.clone();
+            let gl_checked = plan.gl_checked;
+            // Why this way: the plan's reason for its first, the last one's failure for another.
+            let why_not = match &instead {
+                Some(w) => w.clone(),
+                None => plan.because.words(GPU.map_or("", |g| g.name())),
+            };
+            result = eframe::run_native(
+                name,
+                opts,
+                Box::new(move |cc| {
+                    let make = make.borrow_mut().take().ok_or("the app was already made")?;
+                    started(cc, attempt, why_not, gl_checked);
+                    pacing_known(cc);
+                    // Making the app is MDM's own work, not the API's: off the first frame's clock.
+                    own_work_begin();
+                    let app = make(cc);
+                    own_work_end();
+                    Ok(Box::new(app))
+                }),
+            );
+            if result.is_ok() || creator.borrow().is_none() {
+                break;
+            }
+            if k + 1 < angle.len()
+                && let Err(e) = &result
+            {
+                tracing::warn!("{} didn't start: {e}", attempt.name());
+            }
+        }
         // A failure after the app was made is the app's own (or a later one): no retry.
         let Err(e) = &result else { break };
         if creator.borrow().is_none() {
@@ -2044,6 +2077,20 @@ pub fn run<A: eframe::App + 'static>(
             }
         }
         instead = Some(why);
+    }
+    // MDM RT: nothing could draw the window (every ANGLE try above): say so, instead of a start
+    // that ends without a word.
+    #[cfg(all(windows, any(target_arch = "arm", mdm_rt_angle)))]
+    if let Err(e) = &result
+        && creator.borrow().is_some()
+    {
+        crate::win32::message_box(
+            "MDM RT",
+            &format!(
+                "MDM RT couldn't draw its window (OpenGL ES through ANGLE on Direct3D 9 and 11):\n\n{e}\n\n\
+                 Start it again; if this stays, please send %APPDATA%\\mdm-rt\\logs."
+            ),
+        );
     }
     result
 }
